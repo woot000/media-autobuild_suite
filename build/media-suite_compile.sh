@@ -51,7 +51,6 @@ while true; do
     --ffmbc=* ) ffmbc=${1#*=} && shift ;;
     --curl=* ) curl=${1#*=} && shift ;;
     --cyanrip=* ) cyanrip=${1#*=} && shift ;;
-    --redshift=* ) redshift=${1#*=} && shift ;;
     --ripgrep=* ) ripgrep=${1#*=} && shift ;;
     --rav1e=* ) rav1e=${1#*=} && shift ;;
     --dav1d=* ) dav1d=${1#*=} && shift ;;
@@ -457,7 +456,7 @@ if { { [[ $ffmpeg != no || $standalone = y ]] && enabled libtesseract; } ||
     _check=(libglut.a glut.pc)
     if do_vcs "https://github.com/dcnieho/FreeGLUT.git" freeglut; then
         do_uninstall lib/cmake/FreeGLUT include/GL "${_check[@]}"
-        do_cmakeinstall ../freeglut/freeglut -D{UNIX,FREEGLUT_BUILD_DEMOS,FREEGLUT_BUILD_SHARED_LIBS}=OFF -DFREEGLUT_REPLACE_GLUT=ON
+        do_cmakeinstall -D{UNIX,FREEGLUT_BUILD_DEMOS,FREEGLUT_BUILD_SHARED_LIBS}=OFF -DFREEGLUT_REPLACE_GLUT=ON
         do_checkIfExist
     fi
     _deps=(libglut.a)
@@ -466,6 +465,7 @@ if { { [[ $ffmpeg != no || $standalone = y ]] && enabled libtesseract; } ||
         do_pacman_install libjpeg-turbo xz zlib zstd libdeflate
         do_uninstall "${_check[@]}"
         do_patch "https://gitlab.com/libtiff/libtiff/-/merge_requests/233.patch" am
+        do_patch "https://gitlab.com/libtiff/libtiff/-/merge_requests/317.patch" am
         grep_or_sed 'Requires.private' libtiff-4.pc.in \
             '/Libs:/ a\Requires.private: libjpeg liblzma zlib libzstd glut'
         CFLAGS+=" -DFREEGLUT_STATIC" do_cmakeinstall global -D{webp,jbig,UNIX,lerc}=OFF
@@ -486,10 +486,7 @@ if [[ $ffmpeg != no || $standalone = y ]] && enabled libwebp &&
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0001-WEBP_DEP_LIBRARIES-use-Threads-Threads.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0002-deps.cmake-unroll-img-loop-and-use-import-libraries-.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0003-CMake-link-imageioutil-to-exampleutil-after-defined.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0004-CMake-use-target_include_directories-instead-of-incl.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0005-CMake-use-import-libraries-if-possible-for-vwebp.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0006-CMake-use-import-library-for-SDL-if-available.patch" am
-    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0007-CMake-include-src-along-with-binary_dir-src.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0008-CMake-add-WEBP_BUILD_WEBPMUX-to-list-of-checks-for-e.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0009-CMake-add-WEBP_BUILD_WEBPINFO-to-list-of-checks-for-.patch" am
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libwebp/0010-deps-use-pkg-config-instead-of-find_package.patch" am
@@ -1113,8 +1110,9 @@ if [[ $jpegxl = y ]] && do_vcs "https://github.com/libjxl/libjxl.git"; then
     do_pacman_remove asciidoc-py3-git
     do_pacman_install lcms2 asciidoc
     log -q "git.submodule" git submodule update --init --recursive
-    do_cmake global -D{BUILD_TESTING,JPEGXL_ENABLE_{BENCHMARK,MANPAGES,OPENEXR,SKCMS}}=OFF \
-        -DJPEGXL_{BUNDLE_GFLAGS,FORCE_SYSTEM_BROTLI,STATIC}=ON
+    do_cmake global -D{BUILD_TESTING,JPEGXL_ENABLE_{BENCHMARK,MANPAGES,OPENEXR,SKCMS,EXAMPLES}}=OFF \
+        -DJPEGXL_{BUNDLE_GFLAGS,FORCE_SYSTEM_BROTLI,STATIC}=ON \
+        -DJPEGXL_FORCE_SYSTEM_HWY=OFF
     do_ninja
     do_install tools/{c,d}jxl.exe bin-global/
     do_checkIfExist
@@ -1807,11 +1805,13 @@ if [[ $bits = 64bit && $vvc = y ]] &&
 fi
 
 _check=(avisynth/avisynth{,_c}.h
-        avisynth/avs/{alignment,capi,config,cpuid,minmax,posix,types,win}.h)
+        avisynth/avs/{alignment,arch,capi,config,cpuid,minmax,posix,types,win,version}.h)
 if [[ $ffmpeg != no ]] && enabled avisynth &&
     do_vcs "https://github.com/AviSynth/AviSynthPlus.git"; then
     do_uninstall "${_check[@]}"
-    do_cmakeinstall -DHEADERS_ONLY=ON
+    do_cmake -DHEADERS_ONLY=ON
+    do_ninja VersionGen
+    do_ninjainstall 
     do_checkIfExist
 fi
 
@@ -1844,6 +1844,18 @@ if { { [[ $ffmpeg != no ]] && enabled vulkan; } || ! mpv_disabled vulkan; } &&
     unset _DeadSix27 _mabs _shinchiro
 fi
 
+_check=(spirv_cross/spirv_cross_c.h spirv-cross.pc libspirv-cross.a)
+if { { [[ $mpv != n ]] && ! mpv_disabled libplacebo; } ||
+     { [[ $mpv != n ]] && ! mpv_disabled spirv-cross; } ||
+     { [[ $ffmpeg != no ]] && enabled libplacebo; } } &&
+    do_vcs "https://github.com/KhronosGroup/SPIRV-Cross.git"; then
+    do_uninstall include/spirv_cross "${_check[@]}" spirv-cross-c-shared.pc libspirv-cross-c-shared.a
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/SPIRV-Cross/0001-add-a-basic-Meson-build-system-for-use-as-a-subproje.patch" am
+    sed -i 's/0.13.0/0.48.0/' meson.build
+    do_mesoninstall
+    do_checkIfExist
+fi
+
 _check=(lib{glslang,OSDependent,HLSL,OGLCompiler,SPVRemapper}.a
         libSPIRV{,-Tools{,-opt,-link,-reduce}}.a glslang/SPIRV/GlslangToSpv.h)
 if { { [[ $mpv != n ]]  && ! mpv_disabled libplacebo; } ||
@@ -1856,14 +1868,15 @@ if { { [[ $mpv != n ]]  && ! mpv_disabled libplacebo; } ||
 fi
 
 _check=(libplacebo.{a,pc})
-_deps=(lib{vulkan,shaderc_combined}.a)
+_deps=(lib{vulkan,shaderc_combined}.a spirv-cross.pc)
 if { { [[ $mpv != n ]]  && ! mpv_disabled libplacebo; } ||
      { [[ $ffmpeg != no ]] && enabled libplacebo; } } &&
     do_vcs "https://code.videolan.org/videolan/libplacebo.git"; then
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libplacebo/0001-meson-use-shaderc_combined.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/libplacebo/0002-spirv-cross-use-spirv-cross-instead-of-c-shared.patch" am
     do_pacman_install python-mako
     do_uninstall "${_check[@]}"
-    do_mesoninstall -Dvulkan-registry="$LOCALDESTDIR/share/vulkan/registry/vk.xml" -Ddemos=false
+    do_mesoninstall -Dvulkan-registry="$LOCALDESTDIR/share/vulkan/registry/vk.xml" -Ddemos=false -Dd3d11=enabled
     do_checkIfExist
 fi
 
@@ -1963,10 +1976,7 @@ if [[ $ffmpeg != no ]]; then
         enabled libsvtav1 || do_removeOption FFMPEG_OPTS_SHARED "--enable-libsvtav1"
         enabled libsvtvp9 || do_removeOption FFMPEG_OPTS_SHARED "--enable-libsvtvp9"
 
-        enabled vapoursynth && {
-            do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/ffmpeg/0001-Add-Alternative-VapourSynth-demuxer.patch" am
-            do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/ffmpeg/0002-vapoursynth_alt-use-atomic_int-for-async_pending.patch" am
-        }
+        enabled vapoursynth && do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/ffmpeg/0001-Add-Alternative-VapourSynth-demuxer.patch" am
 
         if enabled openal &&
             pc_exists "openal"; then
@@ -2281,15 +2291,6 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
 
     file_installed -s shaderc.pc && file_installed -s shaderc_static.pc &&
         mv "$(file_installed shaderc_static.pc)" "$(file_installed shaderc.pc)"
-
-    _check=(spirv_cross/spirv_cross_c.h spirv-cross.pc libspirv-cross.a)
-    if ! mpv_disabled spirv-cross &&
-        do_vcs "https://github.com/KhronosGroup/SPIRV-Cross.git"; then
-        do_uninstall include/spirv_cross "${_check[@]}" spirv-cross-c-shared.pc libspirv-cross-c-shared.a
-        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/SPIRV-Cross/0001-add-a-basic-Meson-build-system-for-use-as-a-subproje.patch" am
-        do_mesoninstall
-        do_checkIfExist
-    fi
 
     _check=()
     ! mpv_disabled cplayer && _check+=(bin-video/mpv.{exe,com})
@@ -2769,16 +2770,6 @@ if [[ $ffmbc = y ]] && do_vcs "https://github.com/bcoudurier/FFmbc.git#branch=ff
     do_install ffmbc.exe bin-video/
     do_checkIfExist
     unset _notrequired
-fi
-
-_check=(bin-global/redshift.exe)
-if [[ $redshift = y ]] && do_vcs "https://github.com/jonls/redshift.git"; then
-    do_pacman_remove perl
-    [[ -f configure ]] || log bootstrap ./bootstrap
-    CFLAGS+=' -D_POSIX_C_SOURCE' \
-        do_separate_confmakeinstall global --enable-wingdi \
-        --disable-{nls,ubuntu,corelocation,quartz,drm,randr,vidmode,geoclue2,gui}
-    do_checkIfExist
 fi
 
 do_simple_print -p "${orange}Finished $bits compilation of all tools${reset}"
