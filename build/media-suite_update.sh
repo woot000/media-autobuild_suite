@@ -3,20 +3,12 @@
 
 while true; do
     case $1 in
-    --build32=*)
-        build32="${1#*=}"
-        shift
-        ;;
-    --build64=*)
-        build64="${1#*=}"
+    --msysEnv=*)
+        msysEnv="${1#*=}"
         shift
         ;;
     --update=*)
         update="${1#*=}"
-        shift
-        ;;
-    --CC=*)
-        CC="${1#*=}"
         shift
         ;;
     --)
@@ -108,15 +100,11 @@ do_unhide_all_sharedlibs
 { pacman -Qq pacutils || pacman -S --needed --noconfirm pacutils; } > /dev/null 2>&1
 
 extract_pkg_prefix() (
-    case $1 in
-    *32) [[ $build32 != "yes" ]] && return 1 ;;
-    *64) [[ $build64 != "yes" ]] && return 1 ;;
-    esac
     . shell "$1"
     echo "$MINGW_PACKAGE_PREFIX-"
 )
 
-if [[ -f /etc/pac-base.pk && -f /etc/pac-mingw.pk ]]; then
+if [[ -f /etc/pac-base.pk ]] && [[ -f /etc/pac-mingw.pk || -f /etc/pac-clang.pk || -f /etc/pac-ucrt.pk ]]; then
     new=$(mktemp)
     old=$(mktemp)
     echo
@@ -125,23 +113,47 @@ if [[ -f /etc/pac-base.pk && -f /etc/pac-mingw.pk ]]; then
     echo "-------------------------------------------------------------------------------"
     echo
     dos2unix -O /etc/pac-base.pk 2> /dev/null | sort -u >> "$new"
-    mapfile -t newmingw < <(dos2unix -O /etc/pac-mingw.pk /etc/pac-mingw-extra.pk 2>/dev/null | sort -u)
+    prefix32='' prefix64=''
+    if [[ $msysEnv == ALL || $msysEnv == MINGW* ]]; then
+        mapfile -t newmingw < <(dos2unix -O /etc/pac-mingw.pk /etc/pac-mingw-extra.pk 2>/dev/null | sort -u)
+        prefix32=$(extract_pkg_prefix mingw32)
+        prefix64=$(extract_pkg_prefix mingw64)
+        for pkg in "${newmingw[@]}"; do
+            if [[ $msysEnv == MINGW || $msysEnv == MINGW32 ]] && 
+                pacman -Ss "$prefix32$pkg" > /dev/null 2>&1; then
+                printf %s\\n "$prefix32$pkg" >> "$new"
+            fi
+            if [[ $msysEnv == MINGW || $msysEnv == MINGW64 ]] && 
+                pacman -Ss "$prefix64$pkg" > /dev/null 2>&1; then
+                printf %s\\n "$prefix64$pkg" >> "$new"
+            fi
+        done
+    fi
+    if [[ $msysEnv == ALL || $msysEnv == CLANG* ]]; then
+        mapfile -t newclang < <(dos2unix -O /etc/pac-clang.pk /etc/pac-clang-extra.pk 2>/dev/null | sort -u)
+        prefix32=$(extract_pkg_prefix clang32)
+        prefix64=$(extract_pkg_prefix clang64)
+        for pkg in "${newclang[@]}"; do
+            if [[ $msysEnv == CLANG || $msysEnv == CLANG32 ]] && 
+                pacman -Ss "$prefix32$pkg" > /dev/null 2>&1; then
+                printf %s\\n "$prefix32$pkg" >> "$new"
+            fi
+            if [[ $msysEnv == CLANG || $msysEnv == CLANG64 ]] && 
+                pacman -Ss "$prefix64$pkg" > /dev/null 2>&1; then
+                printf %s\\n "$prefix64$pkg" >> "$new"
+            fi
+        done
+    fi
+    if [[ $msysEnv == ALL || $msysEnv == UCRT64 ]]; then
+        mapfile -t newucrt < <(dos2unix -O /etc/pac-ucrt.pk /etc/pac-ucrt-extra.pk 2>/dev/null | sort -u)
+        prefix64=$(extract_pkg_prefix ucrt64)
+        for pkg in "${newucrt[@]}"; do
+            if pacman -Ss "$prefix64$pkg" > /dev/null 2>&1; then
+                printf %s\\n "$prefix64$pkg" >> "$new"
+            fi
+        done
+    fi
     mapfile -t newmsys < <(dos2unix -O /etc/pac-msys-extra.pk 2> /dev/null | sort -u)
-    prefix_32='' prefix_64=''
-    case $CC in
-    *clang*) prefix_32=$(extract_pkg_prefix clang32) prefix_64=$(extract_pkg_prefix clang64) ;;
-    *) prefix_32=$(extract_pkg_prefix mingw32) prefix_64=$(extract_pkg_prefix mingw64) ;;
-    esac
-    for pkg in "${newmingw[@]}"; do
-        if [[ $build32 == "yes" ]] &&
-            pacman -Ss "$prefix_32$pkg" > /dev/null 2>&1; then
-            printf %s\\n "$prefix_32$pkg" >> "$new"
-        fi
-        if [[ $build64 == "yes" ]] &&
-            pacman -Ss "$prefix_64$pkg" > /dev/null 2>&1; then
-            printf %s\\n "$prefix_64$pkg" >> "$new"
-        fi
-    done
     for pkg in "${newmsys[@]}"; do
         pacman -Ss "^${pkg}$" > /dev/null 2>&1 && printf %s\\n "$pkg" >> "$new"
     done
@@ -185,7 +197,7 @@ if [[ -f /etc/pac-base.pk && -f /etc/pac-mingw.pk ]]; then
         pacman -S --noconfirm --needed "${install[@]}"
         pacman -D --asexplicit "${install[@]}"
     fi
-    rm -f /etc/pac-{base,mingw}.pk "$new" "$old"
+    rm -f /etc/pac-{base,mingw,clang,ucrt}.pk "$new" "$old"
 fi
 
 if [[ -d "/trunk" ]]; then
@@ -207,7 +219,9 @@ if [[ -n $have_updates ]]; then
         touch /build/update_core &&
         have_updates="$(/usr/bin/grep -Ev '^(pacman|bash|msys2-runtime)$' <<< "$have_updates")"
     xargs $nargs pacman -S --noconfirm --overwrite "/mingw64/*" \
-        --overwrite "/mingw32/*" --overwrite "/usr/*" <<< "$have_updates"
+        --overwrite "/mingw32/*" --overwrite "/clang64/*" \
+        --overwrite "/clang32/*" --overwrite "/ucrt64/*" \
+        --overwrite "/usr/*" <<< "$have_updates"
 fi
 
 [[ ! -s /usr/ssl/certs/ca-bundle.crt ]] &&
@@ -215,7 +229,9 @@ fi
 
 # do a final overall installation for potential downgrades
 pacman -Syuu --noconfirm --overwrite "/mingw64/*" \
-    --overwrite "/mingw32/*" --overwrite "/usr/*"
+    --overwrite "/mingw32/*" --overwrite "/clang64/*" \
+    --overwrite "/clang32/*" --overwrite "/ucrt64/*" \
+    --overwrite "/usr/*"
 
 do_hide_all_sharedlibs
 
