@@ -280,7 +280,7 @@ For information about the compiler environment see the wiki, there you also have
 - Windows 64-bits (tested with Win10 & Win11 64-bits)
   - 32-bit hosts are not supported.
 - NTFS drive
-- 23GB+ disk space for a full 32 and 64-bit build, 18GB+ for 64-bit
+- 32GB+ disk space for building all environments, 18GB+ for MINGW64
 - 4GB+ RAM
 - At least Powershell 4, Powershell core is not supported at this time
   - Powershell 5.1 can be downloaded [here](https://www.microsoft.com/en-us/download/details.aspx?id=54616)
@@ -313,6 +313,7 @@ How to use it:
 - Select if you want to compile non-free tools like "fdk-aac"
 - Select the numbers of CPU (cores) you want to use
 - Wait a little bit, and hopefully after a while you'll find all your "*.exe" tools under local[32|64]\bin-(audio|global|video)
+  - You can choose between the MINGW (gcc 32/64-bit, uses msvcrt C library), CLANG (llvm 32/64-bit, uses ucrt C library), or UCRT (gcc 64-bit, uses ucrt C library) environments
 
 The script writes an .ini file at /build/media-autobuild_suite.ini, so you only need to make these choices the first time what you want to build.
 
@@ -423,7 +424,7 @@ _pre_cmake(){
     # Downloads the patch and then applies the patch
     do_patch "https://gist.githubusercontent.com/1480c1/9fa9292afedadcea2b3a3e067e96dca2/raw/50a3ed39543d3cf21160f9ad38df45d9843d8dc5/0001-Example-patch-for-learning-purpose.patch"
     # Change directory to the build folder
-    cd_safe "build-${bits}"
+    cd_safe "build-${MSYSTEM}"
     # Run cmake with custom options. This will override the previous cmake commands.
     # $LOCALDESTDIR refers to local64 or local32
     cmake .. -G"Ninja" -DCMAKE_INSTALL_PREFIX="$LOCALDESTDIR" \
@@ -439,7 +440,7 @@ _post_cmake(){
 # Commands to run before building using ninja
 _pre_ninja(){
     # Change directory to the build folder (Absolute path or relative to aom-git)
-    cd_safe "build-${bits}"
+    cd_safe "build-${MSYSTEM}"
     # applies a local patch (Absolute or relative to aom-git)
     do_patch "My-Custom-Patches/test-diff-files.diff"
     # run a custom ninja command.
