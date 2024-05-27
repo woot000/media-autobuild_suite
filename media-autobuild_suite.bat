@@ -149,7 +149,8 @@ set iniOptions=arch license2 vpx2 x2643 x2652 other265 flac fdkaac mediainfo ^
 soxB ffmpegB2 ffmpegUpdate ffmpegChoice mp4box rtmpdump mplayer2 mpv cores deleteSource ^
 strip pack logging bmx standalone updateSuite aom faac exhale ffmbc curl cyanrip2 ^
 rav1e ripgrep dav1d libavif vvc uvg266 jq dssim avs2 dovitool hdr10plustool ^
-timeStamp noMintty noUninstall ccache svthevc svtav1 svtvp9 xvc jo vlc jpegxl vvenc vvdec ffmpegPath
+timeStamp noMintty noUninstall ccache svthevc svtav1 svtvp9 xvc jo vlc jpegxl vvenc vvdec ffmpegPath ^
+archflags optflags sizeflags
 @rem re-add autouploadlogs if we find some way to upload to github directly instead
 
 set deleteIni=0
@@ -1551,11 +1552,41 @@ if %noMinttyF%==2 set "noMintty=n"
 if %noMinttyF% GTR 2 GOTO noMintty
 if %deleteINI%==1 echo.noMintty=^%noMinttyF%>>%ini%
 
+if [0]==[%noUninstallINI%] ( set noUninstallF=2 ) else set "noUninstallF=%noUninstallINI%"
+if %noUninstallF%=="" set "noUninstall=n"
+if %noUninstallF%==1 set "noUninstall=y"
+if %noUninstallF%==2 set "noUninstall=n"
+if %noUninstallF% GTR 2 set "noUninstall=n"
 
-if NOT [0]==[%noUninstallINI%] set noUninstall=%noUninstallINI%
-if %noUninstall%==1 set "noUninstall=y"
-if %noUninstall%==2 set "noUninstall=n"
-if %noUninstall%=="" set "noUninstall=n"
+if [0]==[%archflagsINI%] ( set archflagsF=2 ) else set "archflagsF=%archflagsINI%"
+if %archflagsF%=="" set "archflags=-mtune=generic"
+if %archflagsF%==1 set "archflags=-march=native"
+if %archflagsF%==2 set "archflags=-mtune=generic"
+if %archflagsF%==3 set "archflags= "
+if %archflagsF% GTR 3 set "archflags=-mtune=generic"
+
+if [0]==[%optflagsINI%] ( set optflagsF=2 ) else set "optflagsF=%optflagsINI%"
+if %optflagsF%=="" set "optflags=-O2"
+if %optflagsF%==1 set "optflags=-O1"
+if %optflagsF%==2 set "optflags=-O2"
+if %optflagsF%==3 set "optflags=-O3"
+if %optflagsF%==4 set "optflags=-Ofast"
+if %optflagsF%==5 set "optflags=-O0"
+if %optflagsF%==6 set "optflags=-Og"
+if %optflagsF%==7 set "optflags=-Os"
+if %optflagsF%==8 set "optflags=-Oz"
+if %optflagsF%==9 set "optflags= "
+if %optflagsF% GTR 9 set "optflags=-O2"
+
+if [0]==[%sizeflagsINI%] ( set sizeflagsF=6 ) else set "sizeflagsF=%sizeflagsINI%"
+if %sizeflagsF%=="" set "sizeflags= " && set "sizelinkerflags= "
+if %sizeflagsF%==1 set "sizeflags= " && set "sizelinkerflags=-s"
+if %sizeflagsF%==2 set "sizeflags=-fdata-sections -ffunction-sections" && set "sizelinkerflags=-Wl,--gc-sections"
+if %sizeflagsF%==3 set "sizeflags=-fdata-sections -ffunction-sections" && set "sizelinkerflags=-Wl,--as-needed -Wl,--gc-sections"
+if %sizeflagsF%==4 set "sizeflags=-fdata-sections -ffunction-sections" && set "sizelinkerflags=-Wl,--gc-sections -s"
+if %sizeflagsF%==5 set "sizeflags=-fdata-sections -ffunction-sections" && set "sizelinkerflags=-Wl,--as-needed -Wl,--gc-sections -s"
+if %sizeflagsF%==6 set "sizeflags= " && set "sizelinkerflags= "
+if %sizeflagsF% GTR 6 set "sizeflags= " && set "sizelinkerflags= "
 
 rem ------------------------------------------------------------------
 rem download and install basic msys2 system:
@@ -2016,11 +2047,11 @@ goto :EOF
     echo.PKG_CONFIG="${MINGW_PREFIX}/bin/pkgconf --keep-system-cflags --static"
     echo.PKG_CONFIG_PATH="${LOCALDESTDIR}/lib/pkgconfig:${MINGW_PREFIX}/lib/pkgconfig"
     echo.
-    echo.CFLAGS="-D_FORTIFY_SOURCE=2 -fstack-protector-strong" # security related flags
-    echo.CFLAGS+=" -mtune=generic -O2 -pipe" # performance related flags
+    echo.CFLAGS="-D_FORTIFY_SOURCE=2 -fstack-protector-strong %sizeflags%" # security related flags
+    echo.CFLAGS+=" %archflags% %optflags% -pipe" # performance related flags
     echo.CFLAGS+=" -D__USE_MINGW_ANSI_STDIO=1" # mingw-w64 specific flags for c99 printf
     echo.CXXFLAGS="${CFLAGS}" # copy CFLAGS to CXXFLAGS
-    echo.LDFLAGS="${CFLAGS} -static-libgcc" # copy CFLAGS to LDFLAGS
+    echo.LDFLAGS="${CFLAGS} %sizelinkerflags% -static-libgcc" # copy CFLAGS to LDFLAGS
     echo.case "$CC" in
     echo.*clang^)
     echo.    # clang complains about using static-libstdc++ with C files.

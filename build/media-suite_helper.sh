@@ -1677,7 +1677,6 @@ do_configure() {
         return
     ( [[ -n $userflags ]] && export "${userflags[@]}"; log "configure" \
         ${config_path:-.}/configure --prefix="$LOCALDESTDIR" "$@" "${conf_extras[@]}" )
-    export
     extra_script post configure
     unset conf_extras userflags
 }
