@@ -825,6 +825,46 @@ do_readoptionsfile() {
     fi
 }
 
+do_readflagsfile() {
+    local filename="$1"
+    if [[ -f $filename ]]; then
+        IFS=$'\n' read -d '' -r -a envName < <(sed -r '
+            # remove commented text
+            s/#.*//
+            # remove lines that contain do_
+            s/.*do_.*//
+            # delete empty lines
+            /^\s*$/d
+            # remove characters after first :
+            s/:.*//
+            # remove leading whitespace
+            s/^\s+//
+            # remove trailing whitespace
+            s/\s+$//
+            ' "$filename" | tr -d '\r') # cut cr out from any crlf files
+        IFS=$'\n' read -d '' -r -a envVar < <(sed -r '
+            # remove commented text
+            s/#.*//
+            # remove lines that contain do_
+            s/.*do_.*//
+            # delete empty lines
+            /^\s*$/d
+            # remove characters before first :
+            s/[^:]*://
+            # remove leading whitespace
+            s/^\s+//
+            # remove trailing whitespace
+            s/\s+$//
+            ' "$filename" | tr -d '\r') # cut cr out from any crlf files
+        envAll=()
+        for ((i = 0; i < ${#envName[@]}; i++)); do
+            envAll+=("${envName[$i]}=${envVar[$i]}")
+            echo ${envAll[$i]}
+        done
+        [[ -n $envAll ]] && do_simple_print "Imported flags from ${filename##*/}" >&2
+    fi
+}
+
 do_readbatoptions() {
     local varname="$1"
     # shellcheck disable=SC1117
@@ -1291,6 +1331,22 @@ do_custom_patches() {
     done
 }
 
+get_custom_flags() {
+    local array="$1"
+    local pkgname
+    pkgname="$(get_first_subdir)"
+    local flagsfile="$LOCALBUILDDIR/${pkgname%-*}_flags.txt"
+    [[ -f "$LOCALBUILDDIR/${pkgname%-*}_flags_$MSYSTEM.txt" ]] &&
+        flagsfile="$LOCALBUILDDIR/${pkgname%-*}_flags_$MSYSTEM.txt"
+    if [[ -n $array ]]; then
+        # shellcheck disable=SC2034
+        IFS=$'\n' read -d '' -r -a tmp < <(do_readflagsfile "$flagsfile")
+        declare -ag "$array+=(\"\${tmp[@]}\")"
+    else
+        do_readflagsfile "$flagsfile"
+    fi
+}
+
 do_cmake() {
     local bindir=""
     local root=".."
@@ -1325,16 +1381,18 @@ do_cmake() {
     [[ -z $skip_build_dir ]] && create_build_dir "$cmake_build_dir"
     # use this array to pass additional parameters to cmake
     local cmake_extras=()
+    get_custom_flags userflags
     extra_script pre cmake
     [[ -f "$(get_first_subdir -f)/do_not_reconfigure" ]] &&
         return
     # shellcheck disable=SC2086
-    log "cmake" cmake "$root" -G Ninja -DBUILD_SHARED_LIBS=off \
+    ( [[ -n $userflags ]] && export "${userflags[@]}";
+        log "cmake" cmake "$root" -G Ninja -DBUILD_SHARED_LIBS=off \
         -DCMAKE_TOOLCHAIN_FILE="$LOCALDESTDIR/etc/toolchain.cmake" \
         -DCMAKE_INSTALL_PREFIX="$LOCALDESTDIR" -DUNIX=on \
-        -DCMAKE_BUILD_TYPE=Release $bindir "$@" "${cmake_extras[@]}"
+        -DCMAKE_BUILD_TYPE=Release $bindir "$@" "${cmake_extras[@]}" )
     extra_script post cmake
-    unset cmake_extras
+    unset cmake_extras userflags
 }
 
 do_ninja() {
@@ -1375,15 +1433,18 @@ do_meson() {
     create_build_dir
     # use this array to pass additional parameters to meson
     local meson_extras=()
+    get_custom_flags userflags
     extra_script pre meson
     [[ -f "$(get_first_subdir -f)/do_not_reconfigure" ]] &&
         return
     # shellcheck disable=SC2086
-    PKG_CONFIG="pkgconf --keep-system-libs --keep-system-cflags" CC=${CC/ccache /}.bat CXX=${CXX/ccache /}.bat \
+    ( [[ -n $userflags ]] && export "${userflags[@]}";
+        PKG_CONFIG="pkgconf --keep-system-libs --keep-system-cflags" \
+        CC=${CC/ccache /}.bat CXX=${CXX/ccache /}.bat \
         log "meson" meson setup "$root" --default-library=static --buildtype=release \
-        --prefix="$LOCALDESTDIR" --backend=ninja $bindir "$@" "${meson_extras[@]}"
+        --prefix="$LOCALDESTDIR" --backend=ninja $bindir "$@" "${meson_extras[@]}" )
     extra_script post meson
-    unset meson_extras
+    unset meson_extras userflags
 }
 
 do_mesoninstall() {
@@ -1610,13 +1671,15 @@ do_separate_confmakeinstall() {
 do_configure() {
     # use this array to pass additional parameters to configure
     local conf_extras=()
+    get_custom_flags userflags
     extra_script pre configure
     [[ -f "$(get_first_subdir -f)/do_not_reconfigure" ]] &&
         return
-    log "configure" ${config_path:-.}/configure --prefix="$LOCALDESTDIR" "$@" \
-        "${conf_extras[@]}"
+    ( [[ -n $userflags ]] && export "${userflags[@]}"; log "configure" \
+        ${config_path:-.}/configure --prefix="$LOCALDESTDIR" "$@" "${conf_extras[@]}" )
+    export
     extra_script post configure
-    unset conf_extras
+    unset conf_extras userflags
 }
 
 do_qmake() {
