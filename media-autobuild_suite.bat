@@ -171,7 +171,7 @@ set iniOptions=arch license2 vpx2 x2643 x2652 other265 flac fdkaac mediainfo ^
 soxB ffmpegB2 ffmpegUpdate ffmpegChoice mp4box rtmpdump mplayer2 mpv cores deleteSource ^
 strip pack logging bmx standalone updateSuite aom faac exhale ffmbc curl cyanrip2 ^
 rav1e ripgrep dav1d libavif libheif openexr vvc uvg266 jq dssim avs2 dovitool hdr10plustool ^
-timeStamp noMintty ccache svthevc svtav1 svtvp9 xvc jo vlc CC jpegxl vvenc vvdec ffmpegPath gimp gimpextra
+timeStamp noMintty noUninstall ccache svthevc svtav1 svtvp9 xvc jo vlc jpegxl vvenc vvdec ffmpegPath gimp gimpextra
 @rem re-add autouploadlogs if we find some way to upload to github directly instead
 
 set deleteIni=0
@@ -1705,6 +1705,12 @@ if %noMinttyF%==2 set "noMintty=n"
 if %noMinttyF% GTR 2 GOTO noMintty
 if %deleteINI%==1 echo.noMintty=^%noMinttyF%>>%ini%
 
+
+if NOT [0]==[%noUninstallINI%] set noUninstall=%noUninstallINI%
+if %noUninstall%==1 set "noUninstall=y"
+if %noUninstall%==2 set "noUninstall=n"
+if %noUninstall%=="" set "noUninstall=n"
+
 rem ------------------------------------------------------------------
 rem download and install basic msys2 system:
 rem ------------------------------------------------------------------
@@ -2017,7 +2023,7 @@ if %msysEnv%==ALL (
 )
 
 rem update
-call :runBash update.log /build/media-suite_update.sh --msysEnv=%msysEnv%
+call :runBash update.log /build/media-suite_update.sh --msysEnv=%msysEnv% --noUninstall=%noUninstall%
 
 if exist "%build%\update_core" (
     echo.-------------------------------------------------------------------------------

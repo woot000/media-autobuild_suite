@@ -11,6 +11,10 @@ while true; do
         update="${1#*=}"
         shift
         ;;
+    --noUninstall=*)
+        noUninstall="${1#*=}"
+        shift
+        ;;
     --)
         shift
         break
@@ -163,7 +167,7 @@ if [[ -f /etc/pac-base.pk ]] && [[ -f /etc/pac-mingw.pk || -f /etc/pac-clang.pk 
     mapfile -t install < <(diff --changed-group-format='%>' --unchanged-group-format='' "$old" "$new")
     mapfile -t uninstall < <(diff --changed-group-format='%<' --unchanged-group-format='' "$old" "$new")
 
-    if [[ ${#uninstall[@]} -gt 0 ]]; then
+    if [[ $noUninstall = n ]] && [[ ${#uninstall[@]} -gt 0 ]]; then
         echo
         echo "-------------------------------------------------------------------------------"
         echo "You have more packages than needed!"
