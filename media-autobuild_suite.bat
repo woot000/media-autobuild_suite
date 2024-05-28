@@ -145,11 +145,33 @@ set mpv_options_basic=--disable-debug-build "--lua=luajit"
 set mpv_options_full=dvdnav cdda #egl-angle #html-build ^
 #pdf-build libmpv-shared openal sdl2 #sdl2-gamepad #sdl2-audio #sdl2-video
 
+:: basic options
+set gegl_options_basic="-Ddocs=false" workshop
+
+:: options that are always compiled, whether or not they are disabled
+set gegl_options_builtin=gdk-pixbuf gexiv2 lcms ^
+librsvg libtiff pango pangocairo poppler
+
+:: optional features
+set gegl_options_full=graphviz jasper lensfun libav libraw ^
+libspiro lua maxflow openexr openmp pygobject sdl2 umfpack webp
+
+:: basic options
+set gimp_options_basic=enable-console-bin win32-debug-console enable-multiproc ^
+"-Dprofiling=false" print vector-icons
+
+:: optional features
+set gimp_options_full=aa cairo-pdf fits ghostscript heif ^
+ilbm jpeg2000 jpeg-xl mng openexr openmp webp wmf xpm
+
+:: optional language plug-ins
+set gimp_options_plugins=lua python vala
+
 set iniOptions=arch license2 vpx2 x2643 x2652 other265 flac fdkaac mediainfo ^
 soxB ffmpegB2 ffmpegUpdate ffmpegChoice mp4box rtmpdump mplayer2 mpv cores deleteSource ^
 strip pack logging bmx standalone updateSuite aom faac exhale ffmbc curl cyanrip2 ^
 rav1e ripgrep dav1d libavif libheif openexr vvc uvg266 jq dssim avs2 dovitool hdr10plustool ^
-timeStamp noMintty ccache svthevc svtav1 svtvp9 xvc jo vlc CC jpegxl vvenc vvdec ffmpegPath
+timeStamp noMintty ccache svthevc svtav1 svtvp9 xvc jo vlc CC jpegxl vvenc vvdec ffmpegPath gimp gimpextra
 @rem re-add autouploadlogs if we find some way to upload to github directly instead
 
 set deleteIni=0
@@ -893,7 +915,7 @@ if [0]==[%ffmpegUpdateINI%] (
     echo. Always build FFmpeg when libraries have been updated?
     echo. 1 = Yes
     echo. 2 = No
-    echo. 3 = Only build FFmpeg/mpv and missing dependencies
+    echo. 3 = Only build FFmpeg/GIMP/mpv and missing dependencies
     echo.
     echo. FFmpeg is updated a lot so you only need to select this if you
     echo. absolutely need updated external libraries in FFmpeg.
@@ -1105,6 +1127,95 @@ if %buildvlc%==1 set "vlc=y"
 if %buildvlc%==2 set "vlc=n"
 if %buildvlc% GTR 2 GOTO vlc
 if %deleteINI%==1 echo.vlc=^%buildvlc%>>%ini%
+
+:gimp
+if [0]==[%gimpINI%] (
+    echo -------------------------------------------------------------------------------
+    echo -------------------------------------------------------------------------------
+    echo.
+    echo. Build GIMP (GNU Image Manipulation Program^)?
+    echo.
+    echo. 1 = Yes (builds into an isolated and relocatable directory^)
+    echo. 2 = No
+    echo.
+    echo -------------------------------------------------------------------------------
+    echo -------------------------------------------------------------------------------
+    set /P buildgimp="Build GIMP: "
+) else set buildgimp=%gimpINI%
+
+if "%buildgimp%"=="" GOTO gimp
+if %buildgimp%==1 set "gimp=y"
+if %buildgimp%==1 (
+    set "gimp=y"
+    if not exist %build%\gegl_options.txt (
+        (
+            echo.# The following options follow meson's syntax (-Doption=[true/false/enabled/disabled]^)
+            echo.# Basic options (true/false^)
+            call :writeOptionTrue %gegl_options_basic%
+            echo.
+            echo.# Built-in features (true/false^)
+            call :writeOptionEnabled %gegl_options_builtin%
+            echo.
+            echo.# Optional features (enabled/disabled^)
+            call :writeOptionEnabled %gegl_options_full%
+            )>%build%\gegl_options.txt
+        echo -------------------------------------------------------------------------------
+        echo. File with default gegl options has been created in
+        echo. %build%\gegl_options.txt
+        echo.
+        echo. Edit it now or leave it unedited to compile according to defaults.
+        echo -------------------------------------------------------------------------------
+        pause
+        )
+    if not exist %build%\gimp_options.txt (
+        (
+            echo.# The following options follow meson's syntax (-Doption=[true/false/enabled/disabled]^)
+            echo.# Basic options (true/false^)
+            call :writeOptionTrue %gimp_options_basic%
+            echo.
+            echo.# Optional features (enabled/disabled^)
+            call :writeOptionEnabled %gimp_options_full%
+            echo.
+            echo.# Optional language plugins (enabled/disabled^)
+            call :writeOptionEnabled %gimp_options_plugins%
+            )>%build%\gimp_options.txt
+        echo -------------------------------------------------------------------------------
+        echo. File with default GIMP options has been created in
+        echo. %build%\gimp_options.txt
+        echo.
+        echo. Edit it now or leave it unedited to compile according to defaults.
+        echo -------------------------------------------------------------------------------
+        pause
+        )
+    )
+if %buildgimp%==2 set "gimp=n"
+if %buildgimp% GTR 2 GOTO gimp
+if %deleteINI%==1 echo.gimp=^%buildgimp%>>%ini%
+
+:gimpextra
+if [0]==[%gimpextraINI%] (
+    echo -------------------------------------------------------------------------------
+    echo -------------------------------------------------------------------------------
+    echo.
+    echo. Build GIMP extras:
+    echo.
+    echo. 1 = All [Recommended]
+    echo. 2 = None
+    echo. 3 = Dr. MinGW only (Adds crash log support^)
+    echo. 4 = ISO code locales only (Adds additional translations, requires ~130MB^)
+    echo.
+    echo -------------------------------------------------------------------------------
+    echo -------------------------------------------------------------------------------
+    set /P buildgimpextra="Build GIMP: "
+) else set buildgimpextra=%gimpextraINI%
+
+if "%buildgimpextra%"=="" GOTO gimpextra
+if %buildgimpextra%==1 set "gimpexta=y"
+if %buildgimpextra%==2 set "gimpextra=n"
+if %buildgimpextra%==3 set "gimpextra=drmingw"
+if %buildgimpextra%==4 set "gimpextra=iso"
+if %buildgimpextra% GTR 4 GOTO gimpextra
+if %deleteINI%==1 echo.gimpextra=^%buildgimpextra%>>%ini%
 
 :bmx
 if [0]==[%bmxINI%] (
@@ -1903,7 +2014,7 @@ set compileArgs=--cpuCount=%cpuCount% --build32=%build32% --build64=%build64% ^
 --avs2=%avs2% --dovitool=%dovitool% --hdr10plustool=%hdr10plustool% --timeStamp=%timeStamp% ^
 --noMintty=%noMintty% --ccache=%ccache% --svthevc=%svthevc% --svtav1=%svtav1% --svtvp9=%svtvp9% ^
 --xvc=%xvc% --vlc=%vlc% --libavif=%libavif% --libheif=%libheif% --openexr=%openexr% --jpegxl=%jpegxl% ^
---ffmpegPath=%ffmpegPath% --exitearly=%MABS_EXIT_EARLY%
+--gimp=%gimp% --gimpextra=%gimpextra% --ffmpegPath=%ffmpegPath% --exitearly=%MABS_EXIT_EARLY%
     @REM --autouploadlogs=%autouploadlogs%
     set "noMintty=%noMintty%"
     if %build64%==yes (
@@ -2044,6 +2155,40 @@ for %%i in (%*) do (
         echo #--enable-!_opt:~1!
     ) else (
         echo --enable-!_opt!
+    )
+)
+endlocal
+goto :EOF
+
+:writeOptionTrue
+setlocal enabledelayedexpansion
+for %%i in (%*) do (
+    set _opt=%%~i
+    if ["!_opt:~0,2!"]==["-D"] (
+        echo !_opt!
+    ) else if ["!_opt:~0,3!"]==["#-D"] (
+        echo !_opt!
+    ) else if ["!_opt:~0,1!"]==["#"] (
+        echo #-D!_opt:~1!=true
+    ) else (
+        echo -D!_opt!=true
+    )
+)
+endlocal
+goto :EOF
+
+:writeOptionEnabled
+setlocal enabledelayedexpansion
+for %%i in (%*) do (
+    set _opt=%%~i
+    if ["!_opt:~0,2!"]==["-D"] (
+        echo !_opt!
+    ) else if ["!_opt:~0,3!"]==["#-D"] (
+        echo !_opt!
+    ) else if ["!_opt:~0,1!"]==["#"] (
+        echo #-D!_opt:~1!=enabled
+    ) else (
+        echo -D!_opt!=enabled
     )
 )
 endlocal
