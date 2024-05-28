@@ -148,7 +148,7 @@ set mpv_options_full=dvdnav cdda #egl-angle #html-build ^
 set iniOptions=arch license2 vpx2 x2643 x2652 other265 flac fdkaac mediainfo ^
 soxB ffmpegB2 ffmpegUpdate ffmpegChoice mp4box rtmpdump mplayer2 mpv cores deleteSource ^
 strip pack logging bmx standalone updateSuite aom faac exhale ffmbc curl cyanrip2 ^
-rav1e ripgrep dav1d libavif vvc uvg266 jq dssim avs2 dovitool hdr10plustool ^
+rav1e ripgrep dav1d libavif libheif openexr vvc uvg266 jq dssim avs2 dovitool hdr10plustool ^
 timeStamp noMintty ccache svthevc svtav1 svtvp9 xvc jo vlc CC jpegxl vvenc vvdec ffmpegPath
 @rem re-add autouploadlogs if we find some way to upload to github directly instead
 
@@ -369,6 +369,49 @@ if %buildlibavif%==1 set "libavif=y"
 if %buildlibavif%==2 set "libavif=n"
 if %buildlibavif% GTR 2 GOTO libavif
 if %deleteINI%==1 echo.libavif=^%buildlibavif%>>%ini%
+
+:libheif
+if [0]==[%libheifINI%] (
+    echo -------------------------------------------------------------------------------
+    echo -------------------------------------------------------------------------------
+    echo.
+    echo. Build libheif [HEIF and AVIF image format encoder and decoder]?
+    echo. 1 = Yes
+    echo. 2 = No
+    echo.
+    echo. Will build with aom, dav1d, x265, libde265, and openjpeg2 support by default.
+    echo. SVT-AV1 and Kvazaar must be enabled for libheif to build with those libraries.
+    echo.
+    echo -------------------------------------------------------------------------------
+    echo -------------------------------------------------------------------------------
+    set /P buildlibheif="Build libheif: "
+) else set buildlibheif=%libheifINI%
+
+if "%buildlibheif%"=="" GOTO libheif
+if %buildlibheif%==1 set "libheif=y"
+if %buildlibheif%==2 set "libheif=n"
+if %buildlibheif% GTR 2 GOTO libheif
+if %deleteINI%==1 echo.libheif=^%buildlibheif%>>%ini%
+
+:openexr
+if [0]==[%openexrINI%] (
+    echo -------------------------------------------------------------------------------
+    echo -------------------------------------------------------------------------------
+    echo.
+    echo. Build OpenEXR [EXR image format encoder and decoder]?
+    echo. 1 = Yes
+    echo. 2 = No
+    echo.
+    echo -------------------------------------------------------------------------------
+    echo -------------------------------------------------------------------------------
+    set /P buildopenexr="Build OpenEXR: "
+) else set buildopenexr=%openexrINI%
+
+if "%buildopenexr%"=="" GOTO openexr
+if %buildopenexr%==1 set "openexr=y"
+if %buildopenexr%==2 set "openexr=n"
+if %buildopenexr% GTR 2 GOTO openexr
+if %deleteINI%==1 echo.openexr=^%buildopenexr%>>%ini%
 
 :jpegxl
 if [0]==[%jpegxlINI%] (
@@ -1850,8 +1893,8 @@ set compileArgs=--cpuCount=%cpuCount% --build32=%build32% --build64=%build64% ^
 --ffmbc=%ffmbc% --curl=%curl% --cyanrip=%cyanrip% --rav1e=%rav1e% --ripgrep=%ripgrep% --dav1d=%dav1d% ^
 --vvc=%vvc% --uvg266=%uvg266% --vvenc=%vvenc% --vvdec=%vvdec% --jq=%jq% --jo=%jo% --dssim=%dssim% ^
 --avs2=%avs2% --dovitool=%dovitool% --hdr10plustool=%hdr10plustool% --timeStamp=%timeStamp% ^
---noMintty=%noMintty% --ccache=%ccache% --svthevc=%svthevc% ^
---svtav1=%svtav1% --svtvp9=%svtvp9% --xvc=%xvc% --vlc=%vlc% --libavif=%libavif% --jpegxl=%jpegxl% ^
+--noMintty=%noMintty% --ccache=%ccache% --svthevc=%svthevc% --svtav1=%svtav1% --svtvp9=%svtvp9% ^
+--xvc=%xvc% --vlc=%vlc% --libavif=%libavif% --libheif=%libheif% --openexr=%openexr% --jpegxl=%jpegxl% ^
 --ffmpegPath=%ffmpegPath% --exitearly=%MABS_EXIT_EARLY%
     @REM --autouploadlogs=%autouploadlogs%
     set "noMintty=%noMintty%"
