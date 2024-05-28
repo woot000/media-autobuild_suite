@@ -56,6 +56,8 @@ while true; do
     --rav1e=* ) rav1e=${1#*=} && shift ;;
     --dav1d=* ) dav1d=${1#*=} && shift ;;
     --libavif=* ) libavif=${1#*=} && shift ;;
+    --libheif=* ) libheif=${1#*=} && shift ;;
+    --openexr=* ) openexr=${1#*=} && shift ;;
     --jpegxl=* ) jpegxl=${1#*=} && shift ;;
     --vvc=* ) vvc=${1#*=} && shift ;;
     --uvg266=* ) uvg266=${1#*=} && shift ;;
@@ -128,7 +130,7 @@ unset _keys _root
 _clean_old_builds=(j{config,error,morecfg,peglib}.h
     lib{jpeg,nettle,gnurx,regex}.{,l}a
     lib{opencore-amr{nb,wb},twolame,theora{,enc,dec},caca,magic,uchardet}.{l,}a
-    libSDL{,main}.{l,}a libopen{jpwl,mj2,jp2}.{a,pc}
+    libSDL{,main}.{l,}a libopen{jpwl,mj2}.{a,pc}
     include/{nettle,opencore-amr{nb,wb},theora,cdio,SDL,openjpeg-2.{1,2},luajit-2.0,uchardet,wels}
     regex.h magic.h
     {nettle,vo-aacenc,sdl,uchardet}.pc
@@ -502,7 +504,8 @@ file_installed -s libtiff-4.pc &&
     grep_or_sed '-ldeflate' "$(file_installed libtiff-4.pc)" \
         's/Libs.private:.*/& -ldeflate/'
 
-if [[ $ffmpeg != no || $standalone = y ]] && enabled libwebp; then
+if { [[ $ffmpeg != no || $standalone = y ]] && enabled libwebp; } ||
+    [[ $libheif = y ]]; then
     do_pacman_install giflib
     _check=(libwebp{,mux}.{a,pc})
     [[ $standalone = y ]] && _check+=(libwebp{demux,decoder}.{a,pc}
@@ -521,6 +524,54 @@ if [[ $ffmpeg != no || $standalone = y ]] && enabled libwebp; then
     fi
 fi
 
+if { { [[ $jpegxl = y ]] || { [[ $ffmpeg != no ]] && enabled libjxl; } } || 
+    { [[ $mpv != n ]] && ! mpv_disabled lcms2; } }; then
+    do_pacman_install libjpeg-turbo
+    do_pacman_remove lcms2
+    _check=(liblcms2{,_fast_float}.a lcms2.pc)
+    [[ $standalone = y ]] && _check+=(bin-global/{jpg,link,ps,trans}icc.exe)
+    { { [[ $ffmpeg != no || $standalone = y ]] && enabled libtesseract; } ||
+        { [[ $standalone = y ]] && enabled libwebp; }; } && _check+=(bin-global/tificc.exe)
+    if do_vcs "$SOURCE_REPO_LCMS"; then
+        do_uninstall include/lcms2{,_fast_float,_plugin}.h "${_check[@]}"
+        extracommands=(-Djpeg=enabled)
+        [[ $standalone = y ]] && extracommands+=(-Dutils=true) 
+        { { [[ $ffmpeg != no || $standalone = y ]] && enabled libtesseract; } ||
+            { [[ $standalone = y ]] && enabled libwebp; }; } &&
+            extracommands+=(-Dtiff=enabled)
+        do_mesoninstall global -Dfastfloat=true "${extracommands[@]}"
+        do_checkIfExist
+    fi
+fi
+
+_deps=(liblcms2.a)
+_check=(libopenjp2.{a,pc} openjpeg-2.5/openjpeg.h)
+if { { [[ $ffmpeg != no ]] && enabled libopenjpeg; } ||
+    [[ $libheif = y ]] } &&
+    do_vcs "$SOURCE_REPO_OPENJPEG2"; then
+    do_pacman_remove openjpeg2
+    do_uninstall {include,lib/cmake}/openjpeg-2.5 "${_check[@]}"
+    do_cmakeinstall global -DBUILD_{CODEC,JPIP,JAVA,TESTING}=OFF
+    do_checkIfExist
+fi
+
+if [[ $openexr = y ]]; then
+    do_pacman_install libdeflate
+    _check=(lib{Iex,Ilmthread,OpenEXR{,Core,Util}}-3_3.a libImath-3_2.a
+        {Imath,OpenEXR}.pc Imath/ImathConfig.h OpenEXR/openexr.h)
+    _check+=(bin-global/exr{header,info,make{preview,tiled},manifest,multi{part,view},stdattr}.exe)
+    if do_vcs "$SOURCE_REPO_OPENEXR"; then
+        do_uninstall {include,lib/cmake}/{Imath,OpenEXR} "${_check[@]}"
+        extracommands=(-DOPENEXR_BUILD_TOOLS=ON)
+        # force cmake to link libdeflate statically
+        sed -i 's;EXR_DEFLATE_LIB libdeflate::libdeflate_shared;EXR_DEFLATE_LIB libdeflate::libdeflate_static;' \
+            cmake/OpenEXRSetup.cmake
+        sed -i 's;message(FATAL_ERROR \"The;message(\"The;' "$MINGW_PREFIX"/lib/cmake/libdeflate/libdeflate-targets.cmake
+        do_cmakeinstall global -DBUILD_TESTING=OFF -DOPENEXR_BUILD_EXAMPLES=OFF "${extracommands[@]}"
+        do_checkIfExist
+    fi
+fi
+
 if [[ $jpegxl = y ]] || { [[ $ffmpeg != no ]] && enabled libjxl; }; then
     _check=(bin/gflags_completions.sh gflags.pc gflags/gflags.h libgflags{,_nothreads}.a)
     if do_vcs "$SOURCE_REPO_GFLAGS"; then
@@ -531,8 +582,8 @@ if [[ $jpegxl = y ]] || { [[ $ffmpeg != no ]] && enabled libjxl; }; then
         do_checkIfExist
     fi
 
-    do_pacman_install brotli lcms2
-    _deps=(libgflags.a)
+    do_pacman_install brotli
+    _deps=(libgflags.a liblcms2.a)
     _check=(libjxl{{,_threads}.a,.pc} jxl/decode.h)
     [[ $jpegxl = y ]] && _check+=(bin-global/{{c,d}jxl,cjpegli,jxlinfo}.exe)
     if do_vcs "$SOURCE_REPO_LIBJXL"; then
@@ -540,10 +591,11 @@ if [[ $jpegxl = y ]] || { [[ $ffmpeg != no ]] && enabled libjxl; }; then
         do_uninstall "${_check[@]}" include/jxl
         do_pacman_install asciidoc
         extracommands=()
+        [[ $openexr = y ]] && extracommands+=("-DJPEGXL_ENABLE_OPENEXR=ON") || extracommands+=("-DJPEGXL_ENABLE_OPENEXR=OFF")
         log -q "git.submodule" git submodule update --init --recursive
         [[ $jpegxl = y ]] || extracommands=("-DJPEGXL_ENABLE_TOOLS=OFF")
         CXXFLAGS+=" -DJXL_CMS_STATIC_DEFINE -DJXL_STATIC_DEFINE -DJXL_THREADS_STATIC_DEFINE" \
-            do_cmakeinstall global -D{BUILD_TESTING,JPEGXL_ENABLE_{BENCHMARK,DOXYGEN,MANPAGES,OPENEXR,SKCMS,EXAMPLES}}=OFF \
+            do_cmakeinstall global -D{BUILD_TESTING,JPEGXL_ENABLE_{BENCHMARK,DOXYGEN,MANPAGES,SKCMS,EXAMPLES}}=OFF \
             -DJPEGXL_{FORCE_SYSTEM_{BROTLI,LCMS2},STATIC}=ON "${extracommands[@]}"
         do_checkIfExist
         unset extracommands
@@ -1107,17 +1159,11 @@ fi
 file_installed -s libvmaf.dll.a && rm "$(file_installed libvmaf.dll.a)"
 
 _check=(libaom.a aom.pc)
-if [[ $aom = y || $standalone = y ]]; then
-    _aom_bins=true
-    _check+=(bin-video/aomenc.exe)
-else
-    _aom_bins=false
-fi
-if { [[ $aom = y ]] || [[ $libavif = y ]] || { [[ $ffmpeg != no ]] && enabled libaom; }; } &&
-    do_vcs "$SOURCE_REPO_LIBAOM"; then
+[[ $aom = y || $standalone = y ]] && _check+=(bin-video/aom{dec,enc}.exe)
+if { [[ $aom = y || $libavif = y ]] || { [[ $ffmpeg != no ]] && enabled libaom; } ||
+    [[ $libheif = y ]] } && do_vcs "$SOURCE_REPO_LIBAOM"; then
     extracommands=()
-    if $_aom_bins; then
-        _check+=(bin-video/aomdec.exe)
+    if [[ $aom = y || $standalone = y ]]; then
         # fix google's shit
         sed -ri 's;_PREFIX.+CMAKE_INSTALL_BINDIR;_FULL_BINDIR;' \
             build/cmake/aom_install.cmake
@@ -1131,11 +1177,11 @@ if { [[ $aom = y ]] || [[ $libavif = y ]] || { [[ $ffmpeg != no ]] && enabled li
     do_checkIfExist
     unset extracommands
 fi
-unset _aom_bins
 
 _check=(dav1d/dav1d.h dav1d.pc libdav1d.a)
 [[ $standalone = y ]] && _check+=(bin-video/dav1d.exe)
-if { [[ $dav1d = y ]] || [[ $libavif = y ]] || { [[ $ffmpeg != no ]] && enabled libdav1d; }; } &&
+if { [[ $dav1d = y || $libavif = y ]] || { [[ $ffmpeg != no ]] && enabled libdav1d; } || 
+    [[ $libheif = y ]] } &&
     do_vcs "$SOURCE_REPO_DAV1D"; then
     do_uninstall include/dav1d "${_check[@]}"
     extracommands=()
@@ -1713,7 +1759,8 @@ fi
 
 _check=(x265{,_config}.h libx265.a x265.pc)
 [[ $standalone = y ]] && _check+=(bin-video/x265.exe)
-if [[ ! $x265 = n ]] && do_vcs "$SOURCE_REPO_X265"; then
+if { [[ ! $x265 = n ]] || [[ $libheif = y ]] } &&
+    do_vcs "$SOURCE_REPO_X265"; then
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/x265/0001-cmake-split-absolute-library-paths-to-L-and-l.patch" am
     grep_and_sed CMAKE_CXX_IMPLICIT_LINK_LIBRARIES source/CMakeLists.txt 's|\$\{CMAKE_CXX_IMPLICIT_LINK_LIBRARIES\}||g'
     do_uninstall libx265{_main10,_main12}.a bin-video/libx265_main{10,12}.dll "${_check[@]}"
@@ -1738,7 +1785,7 @@ if [[ ! $x265 = n ]] && do_vcs "$SOURCE_REPO_X265"; then
     }
     [[ $standalone = y ]] && cli=-DENABLE_CLI=ON
 
-    if [[ $x265 =~ (o12|s|d|y) ]]; then
+    if [[ $x265 =~ (o12|s|d|y) ]] || [[ $libheif = y ]]; then
         cd_safe "$build_root/12bit"
         if [[ $x265 = s ]]; then
             do_x265_cmake "shared 12-bit lib" $assembly -DENABLE_SHARED=ON -DMAIN12=ON
@@ -1746,13 +1793,13 @@ if [[ ! $x265 = n ]] && do_vcs "$SOURCE_REPO_X265"; then
             _check+=(bin-video/libx265_main12.dll)
         elif [[ $x265 = o12 ]]; then
             do_x265_cmake "12-bit lib/bin" $assembly $cli -DMAIN12=ON
-        else
+        elif [[ $x265 = d || $x265 = y ]] || [[ $libheif = y ]]; then
             do_x265_cmake "12-bit lib for multilib" $assembly -DEXPORT_C_API=OFF -DMAIN12=ON
             cp libx265.a ../8bit/libx265_main12.a
         fi
     fi
 
-    if [[ $x265 =~ (o10|s|d|y) ]]; then
+    if [[ $x265 =~ (o10|s|d|y) ]] || [[ $libheif = y ]]; then
         cd_safe "$build_root/10bit"
         if [[ $x265 = s ]]; then
             do_x265_cmake "shared 10-bit lib" $assembly -DENABLE_SHARED=ON
@@ -1760,17 +1807,17 @@ if [[ ! $x265 = n ]] && do_vcs "$SOURCE_REPO_X265"; then
             _check+=(bin-video/libx265_main10.dll)
         elif [[ $x265 = o10 ]]; then
             do_x265_cmake "10-bit lib/bin" $assembly $cli
-        else
+        elif [[ $x265 = d || $x265 = y ]] || [[ $libheif = y ]]; then
             do_x265_cmake "10-bit lib for multilib" $assembly -DEXPORT_C_API=OFF
             cp libx265.a ../8bit/libx265_main10.a
         fi
     fi
 
-    if [[ $x265 =~ (o8|s|d|y) ]]; then
+    if [[ $x265 =~ (o8|s|d|y) ]] || [[ $libheif = y ]]; then
         cd_safe "$build_root/8bit"
         if [[ $x265 = s || $x265 = o8 ]]; then
             do_x265_cmake "8-bit lib/bin" $cli -DHIGH_BIT_DEPTH=OFF
-        else
+        elif [[ $x265 = d || $x265 = y ]] || [[ $libheif = y ]]; then
             do_x265_cmake "multilib lib/bin" -DEXTRA_LIB="x265_main10.a;x265_main12.a" \
                 -DEXTRA_LINK_FLAGS=-L. $cli -DHIGH_BIT_DEPTH=OFF -DLINKED_{10,12}BIT=ON
             mv libx265.a libx265_main.a
@@ -1801,6 +1848,27 @@ else
     pc_exists x265 || do_removeOption "--enable-libx265"
 fi
 pc_exists x265 && sed -i 's|-lmingwex||g' "$(file_installed x265.pc)"
+
+if [[ $libheif = y ]]; then
+    do_pacman_install libde265 libjpeg-turbo
+    sed -i 's|@LIBS_PRIVATE@||g' "$MINGW_PREFIX/lib/pkgconfig/libde265.pc"
+    _deps=(lib{aom,dav1d,openjp2,x265}.a)
+    [[ $other265 = y ]] && _deps+=(libkvazaar.a)
+    [[ $bits = 64bit && $svtav1 = y ]] && _deps+=(libSvtAv1Enc.a)
+    _check=(libheif.{a,pc} libheif/heif.h)
+    _check+=(bin-global/heif-{convert,enc,info,thumbnailer}.exe)
+    if do_vcs "$SOURCE_REPO_LIBHEIF"; then
+        do_uninstall {include,lib/cmake}/libheif "${_check[@]}"
+        extracommands=(-DWITH_EXAMPLES=ON -DWITH_OpenJPEG_{DE,EN}CODER=ON)
+        [[ $other265 = y ]] && pc_exists "kvazaar" && extracommands+=(-DWITH_KVAZAAR=ON)
+        [[ $bits = 64bit && $svtav1 = y ]] && pc_exists "SvtAv1Enc" && extracommands+=(-DWITH_SvtEnc=ON)
+        CXXFLAGS+=" -DKVZ_STATIC_LIB" do_cmakeinstall global -DWITH_{AOM_{DE,EN}CODER,DAV1D,{LIBDE,X}265}=ON  \
+            -DWITH_{DEFLATE_HEADER_COMPRESSION,JPEG_{DE,EN}CODER,UNCOMPRESSED_CODEC}=ON \
+            -D{BUILD_TESTING,ENABLE_PLUGIN_LOADING,WITH_GDK_PIXBUF}=OFF \
+            -DCMAKE_DISABLE_FIND_PACKAGE_Doxygen=TRUE "${extracommands[@]}"
+        do_checkIfExist
+    fi
+fi
 
 _check=(xvid.h libxvidcore.a bin-video/xvid_encraw.exe)
 if enabled libxvid && [[ $standalone = y ]] &&
@@ -2160,7 +2228,6 @@ if [[ $ffmpeg != no ]]; then
     fi
     enabled libcaca && do_addOption --extra-cflags=-DCACA_STATIC && do_pacman_install libcaca
     enabled libmodplug && do_addOption --extra-cflags=-DMODPLUG_STATIC && do_pacman_install libmodplug
-    enabled libopenjpeg && do_pacman_install openjpeg2
     if enabled libopenh264; then
         # We use msys2's package for the header and import library so we don't build it, for licensing reasons
         do_pacman_install openh264
@@ -2488,7 +2555,6 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
     do_pacman_remove uchardet-git
     ! mpv_disabled uchardet && do_pacman_install uchardet
     ! mpv_disabled libarchive && do_pacman_install libarchive
-    ! mpv_disabled lcms2 && do_pacman_install lcms2
 
     do_pacman_remove angleproject-git
     _check=(EGL/egl.h)
