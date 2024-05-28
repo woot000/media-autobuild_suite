@@ -149,6 +149,18 @@ For information about the compiler environment see the wiki, there you also have
         - dav1d (dec only)
         - rav1e (enc only)
         - svt-av1 (enc only)
+    - libheif (git) with following encoders/decoders:
+        - avif
+            - aom (enc/dec)
+            - dav1d (dec only)
+            - svt-av1 (enc only)
+        - heic
+            - kvazaar (enc only)
+            - libde265 (mingw-w64) (dec only)
+            - x265 (enc only)
+        - libjpeg-turbo (mingw-w64) (enc/dec)
+        - libopenjpeg2 (enc/dec)
+        - uncompressed (built-in) (enc/dec)
     - libbdplus (git) (shared)
     - mediainfo cli (git)
     - mp4box (git)
@@ -173,6 +185,7 @@ For information about the compiler environment see the wiki, there you also have
             - libarchive (mingw-w64)
             - shared libmpv
             - openal (git)
+    - openexr (git)
     - opus-tools (git)
     - rav1e (git)
     - ripgrep (git)
