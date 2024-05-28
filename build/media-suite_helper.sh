@@ -92,16 +92,16 @@ do_print_progress() {
 }
 
 set_title() {
-    printf '\033]0;media-autobuild_suite  %s\a' "($bits)${1:+: $1}"
+    printf '\033]0;media-autobuild_suite  %s\a' "($MSYSTEM)${1:+: $1}"
 }
 
 do_exit_prompt() {
-    if [[ -n $build32$build64 ]]; then # meaning "executing this in the suite's context"
+    if [[ -n $msysEnv ]]; then # meaning "executing this in the suite's context"
         create_diagnostic
         zip_logs
     fi
     do_prompt "$*"
-    [[ -n $build32$build64 ]] && exit 1
+    [[ -n $msysEnv ]] && exit 1
 }
 
 cd_safe() {
@@ -301,8 +301,8 @@ do_vcs() {
 
     if [[ $oldHead != "$newHead" || -f custom_updated ]]; then
         touch recently_updated
-        rm -f ./build_successful{32,64}bit{,_*}
-        if [[ $build32$build64$bits == yesyes64bit ]]; then
+        rm -f ./build_successful$MSYSTEM{,_*}
+        if [[ $msysEnv$MSYSTEM == ALLUCRT64 ]]; then
             new_updates=yes
             new_updates_packages="$new_updates_packages [$vcsFolder]"
         fi
@@ -312,7 +312,7 @@ do_vcs() {
             echo
         } >> "$LOCALBUILDDIR/newchangelog"
         do_print_status "┌ $vcsFolder git" "$orange" "Updates found"
-    elif [[ -f recently_updated && ! -f build_successful$bits${flavor:+_$flavor} ]]; then
+    elif [[ -f recently_updated && ! -f build_successful$MSYSTEM${flavor:+_$flavor} ]]; then
         do_print_status "┌ $vcsFolder git" "$orange" "Recently updated"
     elif [[ -n ${vcsCheck[*]} ]] && ! files_exist "${vcsCheck[@]}"; then
         do_print_status "┌ $vcsFolder git" "$orange" "Files missing"
@@ -538,13 +538,7 @@ do_extract() {
     # accepted: zip, 7z, tar, tar.gz, tar.bz2 and tar.xz
     [[ -z $dirName ]] && dirName=$(guess_dirname "$archive")
     if [[ $dirName != "." && -d $dirName ]]; then
-        if [[ $build32 == "yes" && ! -f \
-            "$dirName/build_successful32bit${flavor:+_$flavor}" ]]; then
-            rm -rf "$dirName"
-        elif [[ $build64 == "yes" && ! -f \
-            "$dirName/build_successful64bit${flavor:+_$flavor}" ]]; then
-            rm -rf "$dirName"
-        fi
+        [[ ! -f "$dirName/build_successful$MSYSTEM${flavor:+_$flavor}" ]] && rm -rf "$dirName"
     elif [[ -d $dirName ]]; then
         $nocd || cd_safe "$dirName"
         return 0
@@ -635,8 +629,8 @@ do_pack() {
 
 do_zipman() {
     local file files
-    local man_dirs=(/local{32,64}/share/man)
-    [[ $gimp = y ]] && man_dirs+=(/local{32,64}/gimp/share/man)
+    local man_dirs=(/local{32,64}-{mingw,clang,ucrt}/share/man)
+    [[ $gimp = y ]] && man_dirs+=(/local{32,64}-{mingw,clang,ucrt}/gimp/share/man)
     files=$(find "${man_dirs[@]}" -type f \! -name "*.gz" \! -name "*.db" \! -name "*.bz2" 2> /dev/null)
     for file in $files; do
         gzip -9 -n -f "$file"
@@ -649,7 +643,7 @@ do_checkIfExist() {
     local packetName
     packetName="$(get_first_subdir)"
     local packageDir="${LOCALBUILDDIR}/${packetName}"
-    local buildSuccessFile="${packageDir}/build_successful${bits}"
+    local buildSuccessFile="${packageDir}/build_successful$MSYSTEM"
     local dry="${dry:-n}"
     local check=()
     if [[ -n $1 ]]; then
@@ -668,10 +662,10 @@ do_checkIfExist() {
         [[ $stripping == y ]] && do_strip "${check[@]}"
         [[ $packing == y ]] && do_pack "${check[@]}"
         do_print_status "└ $packetName" "$blue" "Updated"
-        [[ $build32 == yes || $build64 == yes ]] && [[ -d $packageDir ]] &&
+        [[ -n $msysEnv ]] && [[ -d $packageDir ]] &&
             touch "$buildSuccessFile"
     else
-        [[ $build32 == yes || $build64 == yes ]] && [[ -d $packageDir ]] &&
+        [[ -n $msysEnv ]] && [[ -d $packageDir ]] &&
             rm -f "$buildSuccessFile"
         do_print_status "└ $packetName" "$red" "Failed"
         if ${_notrequired:-false}; then
@@ -832,6 +826,46 @@ do_readoptionsfile() {
     fi
 }
 
+do_readflagsfile() {
+    local filename="$1"
+    if [[ -f $filename ]]; then
+        IFS=$'\n' read -d '' -r -a envName < <(sed -r '
+            # remove commented text
+            s/#.*//
+            # remove lines that contain do_
+            s/.*do_.*//
+            # delete empty lines
+            /^\s*$/d
+            # remove characters after first :
+            s/:.*//
+            # remove leading whitespace
+            s/^\s+//
+            # remove trailing whitespace
+            s/\s+$//
+            ' "$filename" | tr -d '\r') # cut cr out from any crlf files
+        IFS=$'\n' read -d '' -r -a envVar < <(sed -r '
+            # remove commented text
+            s/#.*//
+            # remove lines that contain do_
+            s/.*do_.*//
+            # delete empty lines
+            /^\s*$/d
+            # remove characters before first :
+            s/[^:]*://
+            # remove leading whitespace
+            s/^\s+//
+            # remove trailing whitespace
+            s/\s+$//
+            ' "$filename" | tr -d '\r') # cut cr out from any crlf files
+        envAll=()
+        for ((i = 0; i < ${#envName[@]}; i++)); do
+            envAll+=("${envName[$i]}=${envVar[$i]}")
+            echo ${envAll[$i]}
+        done
+        [[ -n $envAll ]] && do_simple_print "Imported flags from ${filename##*/}" >&2
+    fi
+}
+
 do_readbatoptions() {
     local varname="$1"
     # shellcheck disable=SC1117
@@ -858,8 +892,8 @@ do_getFFmpegConfig() {
         echo "Imported default FFmpeg options from .bat"
     else
         local custom_opts_file="$LOCALBUILDDIR/ffmpeg_options.txt"
-        if [[ -f "$LOCALBUILDDIR/ffmpeg_options_$bits.txt" ]]; then
-            custom_opts_file="$LOCALBUILDDIR/ffmpeg_options_$bits.txt"
+        if [[ -f "$LOCALBUILDDIR/ffmpeg_options_$MSYSTEM.txt" ]]; then
+            custom_opts_file="$LOCALBUILDDIR/ffmpeg_options_$MSYSTEM.txt"
         fi
         IFS=$'\n' read -d '' -r -a FFMPEG_DEFAULT_OPTS < <(do_readoptionsfile "$custom_opts_file")
         unset FFMPEG_DEFAULT_OPTS_SHARED
@@ -1476,6 +1510,22 @@ do_custom_patches() {
     done
 }
 
+get_custom_flags() {
+    local array="$1"
+    local pkgname
+    pkgname="$(get_first_subdir)"
+    local flagsfile="$LOCALBUILDDIR/${pkgname%-*}_flags.txt"
+    [[ -f "$LOCALBUILDDIR/${pkgname%-*}_flags_$MSYSTEM.txt" ]] &&
+        flagsfile="$LOCALBUILDDIR/${pkgname%-*}_flags_$MSYSTEM.txt"
+    if [[ -n $array ]]; then
+        # shellcheck disable=SC2034
+        IFS=$'\n' read -d '' -r -a tmp < <(do_readflagsfile "$flagsfile")
+        declare -ag "$array+=(\"\${tmp[@]}\")"
+    else
+        do_readflagsfile "$flagsfile"
+    fi
+}
+
 do_cmake() {
     local bindir=""
     local root=".."
@@ -1510,16 +1560,18 @@ do_cmake() {
     [[ -z $skip_build_dir ]] && create_build_dir "$cmake_build_dir"
     # use this array to pass additional parameters to cmake
     local cmake_extras=()
+    get_custom_flags userflags
     extra_script pre cmake
     [[ -f "$(get_first_subdir -f)/do_not_reconfigure" ]] &&
         return
     # shellcheck disable=SC2086
-    log "cmake" cmake "$root" -G Ninja -DBUILD_SHARED_LIBS=off \
+    ( [[ -n $userflags ]] && export "${userflags[@]}";
+        log "cmake" cmake "$root" -G Ninja -DBUILD_SHARED_LIBS=off \
         -DCMAKE_TOOLCHAIN_FILE="$LOCALDESTDIR/etc/toolchain.cmake" \
         -DCMAKE_INSTALL_PREFIX="$LOCALDESTDIR" -DUNIX=on \
-        -DCMAKE_BUILD_TYPE=Release $bindir "$@" "${cmake_extras[@]}"
+        -DCMAKE_BUILD_TYPE=Release $bindir "$@" "${cmake_extras[@]}" )
     extra_script post cmake
-    unset cmake_extras
+    unset cmake_extras userflags
 }
 
 do_ninja() {
@@ -1560,15 +1612,18 @@ do_meson() {
     create_build_dir
     # use this array to pass additional parameters to meson
     local meson_extras=()
+    get_custom_flags userflags
     extra_script pre meson
     [[ -f "$(get_first_subdir -f)/do_not_reconfigure" ]] &&
         return
     # shellcheck disable=SC2086
-    PKG_CONFIG="pkgconf --keep-system-libs --keep-system-cflags" CC=${CC/ccache /}.bat CXX=${CXX/ccache /}.bat \
+    ( [[ -n $userflags ]] && export "${userflags[@]}";
+        PKG_CONFIG="pkgconf --keep-system-libs --keep-system-cflags" \
+        CC=${CC/ccache /}.bat CXX=${CXX/ccache /}.bat \
         log "meson" meson setup "$root" --default-library=static --buildtype=release \
-        --prefix="$LOCALDESTDIR" --backend=ninja $bindir "$@" "${meson_extras[@]}"
+        --prefix="$LOCALDESTDIR" --backend=ninja $bindir "$@" "${meson_extras[@]}" )
     extra_script post meson
-    unset meson_extras
+    unset meson_extras userflags
 }
 
 do_mesoninstall() {
@@ -1628,7 +1683,7 @@ do_rustcinstall() {
 }
 
 compilation_fail() {
-    [[ -z $build32$build64 ]] && return 1
+    [[ -z $msysEnv ]] && return 1
     local reason="$1"
     local operation="${reason,,}"
     if [[ $logging == y ]]; then
@@ -1675,7 +1730,7 @@ zip_logs() {
         } | sort -uo failedFiles
         7za -mx=9 a logs.zip -- @failedFiles > /dev/null && rm failedFiles
     )
-    # [[ ! -f $LOCALBUILDDIR/no_logs && -n $build32$build64 && $autouploadlogs = y ]] &&
+    # [[ ! -f $LOCALBUILDDIR/no_logs && -n $msysEnv && $autouploadlogs = y ]] &&
     #     url="$(cd "$LOCALBUILDDIR" && /usr/bin/curl -sF'file=@logs.zip' https://0x0.st)"
     echo
     if [[ $url ]]; then
@@ -1739,7 +1794,7 @@ create_build_dir() {
     done
     shift $((OPTIND - 1))
 
-    build_dir="${build_root:+$build_root/}build${1:+-$1}-$bits"
+    build_dir="${build_root:+$build_root/}build${1:+-$1}-$MSYSTEM"
     [[ -z $build_root && -d ../$build_dir ]] && cd_safe ..
 
     if [[ -d $build_dir && ! -f $(get_first_subdir -f)/do_not_clean ]]; then
@@ -1795,13 +1850,14 @@ do_separate_confmakeinstall() {
 do_configure() {
     # use this array to pass additional parameters to configure
     local conf_extras=()
+    get_custom_flags userflags
     extra_script pre configure
     [[ -f "$(get_first_subdir -f)/do_not_reconfigure" ]] &&
         return
-    log "configure" ${config_path:-.}/configure --prefix="$LOCALDESTDIR" "$@" \
-        "${conf_extras[@]}"
+    ( [[ -n $userflags ]] && export "${userflags[@]}"; log "configure" \
+        ${config_path:-.}/configure --prefix="$LOCALDESTDIR" "$@" "${conf_extras[@]}" )
     extra_script post configure
-    unset conf_extras
+    unset conf_extras userflags
 }
 
 do_qmake() {
@@ -1848,7 +1904,7 @@ do_hide_pacman_sharedlibs() {
 do_hide_all_sharedlibs() {
     local dryrun="${dry:-n}"
     local files
-    files="$(find /{mingw,clang}{32,64}/lib /{mingw,clang}{32/i686,64/x86_64}-w64-mingw32/lib -name "*.dll.a" 2> /dev/null)"
+    files="$(find /{{mingw,clang}{32,64},ucrt64}/lib /{{mingw,clang}{32/i686,64/x86_64},ucrt64/x86_64}-w64-mingw32/lib -name "*.dll.a" 2> /dev/null)"
     local tomove=()
     for file in $files; do
         [[ -f ${file%*.dll.a}.a ]] && tomove+=("$file")
@@ -1865,7 +1921,7 @@ do_hide_all_sharedlibs() {
 do_unhide_all_sharedlibs() {
     local dryrun="${dry:-n}"
     local files
-    files="$(find /{mingw,clang}{32,64}/lib /{mingw,clang}{32/i686,64/x86_64}-w64-mingw32/lib -name "*.dll.a.dyn" 2> /dev/null)"
+    files="$(find /{{mingw,clang}{32,64},ucrt64}/lib /{{mingw,clang}{32/i686,64/x86_64},ucrt64/x86_64}-w64-mingw32/lib -name "*.dll.a.dyn" 2> /dev/null)"
     local tomove=()
     local todelete=()
     for file in $files; do
@@ -1899,7 +1955,7 @@ is_pkg_installed() (
 do_pacman_install() (
     ret=true
     prefix=$MINGW_PACKAGE_PREFIX-
-    file=/etc/pac-mingw-extra.pk
+    file=/etc/pac-${MSYSTEM//[0-9]}-extra.pk
     pkgs=()
     while true; do
         case "$1" in
@@ -1931,14 +1987,14 @@ do_pacman_install() (
             --overwrite "/clang32/*" \
             "$prefix$pkg" > /dev/null 2>&1; then
             pacman -D --asexplicit "$prefix$pkg" > /dev/null 2>&1
-            echo "$pkg" >> $file
+            echo "$pkg" >> ${file,,}
             echo "done"
         else
             ret=false
             echo "failed"
         fi
     done
-    sort -uo $file{,} > /dev/null 2>&1
+    sort -uo ${file,,}{,} > /dev/null 2>&1
     do_hide_all_sharedlibs
     $ret
 )
@@ -1946,7 +2002,7 @@ do_pacman_install() (
 do_pacman_remove() (
     ret=true
     prefix=$MINGW_PACKAGE_PREFIX-
-    file=/etc/pac-mingw-extra.pk
+    file=/etc/pac-${MSYSTEM//[0-9]}-extra.pk
     pkgs=()
     while true; do
         case "$1" in
@@ -1967,7 +2023,7 @@ do_pacman_remove() (
     done
 
     for pkg in "${pkgs[@]}"; do
-        sed -i "/^${pkg}$/d" "$file" > /dev/null 2>&1
+        sed -i "/^${pkg}$/d" "${file,,}" > /dev/null 2>&1
         do_simple_print -n "Uninstalling $pkg... "
         do_hide_pacman_sharedlibs "$prefix$pkg" revert
         if pacman -Rs --noconfirm --ask=20 "$prefix$pkg" > /dev/null 2>&1; then
@@ -1978,7 +2034,7 @@ do_pacman_remove() (
             echo "failed"
         fi
     done
-    sort -uo "$file"{,} > /dev/null 2>&1
+    sort -uo "${file,,}"{,} > /dev/null 2>&1
     do_hide_all_sharedlibs
     $ret
 )
@@ -2234,14 +2290,14 @@ clean_suite() {
     do_simple_print -p "${orange}Deleting status files...${reset}"
     cd_safe "$LOCALBUILDDIR" > /dev/null
     find . -maxdepth 2 -name recently_updated -delete
-    find . -maxdepth 2 -regex ".*build_successful\(32\|64\)bit\(_\\w+\)?\$" -delete
+    find . -maxdepth 2 -regex ".*build_successful\(MINGW\|CLANG\|UCRT\)\(32\|64\)\(_\\w+\)?\$" -delete
     echo -e "\\n\\t${green}Zipping man files...${reset}"
     do_zipman
 
     if [[ $deleteSource == y ]]; then
         echo -e "\\t${orange}Deleting temporary build dirs...${reset}"
         find . -maxdepth 5 -name "ab-suite.*.log" -delete
-        find . -maxdepth 5 -type d -name "build-*bit" -exec rm -rf {} +
+        find . -maxdepth 5 -type d -name "build-*$MSYSTEM" -exec rm -rf {} +
         find . -maxdepth 2 -type d -name "build" -exec test -f "{}/CMakeCache.txt" ';' -exec rm -rf {} ';'
 
         if [[ -f _to_remove ]]; then
@@ -2255,7 +2311,7 @@ clean_suite() {
         fi
     fi
 
-    rm -f {firstrun,firstUpdate,secondUpdate,pacman,mingw32,mingw64}.log diagnostics.txt \
+    rm -f {firstrun,firstUpdate,secondUpdate,pacman,{mingw,clang}{32,64},ucrt64}.log diagnostics.txt \
         logs.zip _to_remove ./*.stripped.log
 
     [[ -f last_run ]] && mv last_run last_successful_run && touch last_successful_run
@@ -2501,14 +2557,14 @@ fix_cmake_crap_exports() {
     declare -a _cmakefiles
 
     _mixeddestdir="$(cygpath -m "$LOCALDESTDIR")"
-    mapfile -t _cmakefiles < <(grep -Plr '\w:/[\w/]*local(?:32|64)' "$_dir"/*.cmake)
+    mapfile -t _cmakefiles < <(grep -Plr '\w:/[\w/]*local(?:32|64)-(?:mingw|clang|ucrt)' "$_dir"/*.cmake)
 
     # noop if array is empty
     test ${#_cmakefiles[@]} -lt 1 && return
 
     for _cmakefile in "${_cmakefiles[@]}"; do
         # find at least one
-        _oldDestDir="$(grep -oP -m1 '\w:/[\w/]*local(?:32|64)' "$_cmakefile")"
+        _oldDestDir="$(grep -oP -m1 '\w:/[\w/]*local(?:32|64)-(?:mingw|clang|ucrt)' "$_cmakefile")"
 
         # noop if there's no expected install prefix found
         [[ -z $_oldDestDir ]] && continue
@@ -2516,7 +2572,7 @@ fix_cmake_crap_exports() {
         [[ $_mixeddestdir == "$_oldDestDir" ]] && continue
 
         # use perl for the matching and replacing, a bit simpler than with sed
-        perl -i -p -e 's;([A-Z]:/.*?)local(?:32|64);'"$_mixeddestdir"'\2;' "$_cmakefile"
+        perl -i -p -e 's;([A-Z]:/.*?)local(?:32|64)-(?:mingw|clang|ucrt);'"$_mixeddestdir"'\2;' "$_cmakefile"
     done
 }
 
@@ -2689,7 +2745,7 @@ _pre_cmake(){
     # Downloads the patch and then applies the patch
     #do_patch "https://gist.githubusercontent.com/1480c1/9fa9292afedadcea2b3a3e067e96dca2/raw/50a3ed39543d3cf21160f9ad38df45d9843d8dc5/0001-Example-patch-for-learning-purpose.patch"
     # Change directory to the build folder
-    #cd_safe "build-${bits}"
+    #cd_safe "build-${MSYSTEM}"
 
     # Add additional options to suite's cmake execution
     #cmake_extras=(-DENABLE_SWEET_BUT_BROKEN_FEATURE=on)

@@ -21,8 +21,7 @@ printf '#!/bin/bash\nbash %s %s\n' "$LOCALBUILDDIR/media-suite_compile.sh" "$*" 
 while true; do
     case $1 in
     --cpuCount=* ) cpuCount=${1#*=} && shift ;;
-    --build32=* ) build32=${1#*=} && shift ;;
-    --build64=* ) build64=${1#*=} && shift ;;
+    --msysEnv=* ) msysEnv=${1#*=} && shift ;;
     --mp4box=* ) mp4box=${1#*=} && shift ;;
     --rtmpdump=* ) rtmpdump=${1#*=} && shift ;;
     --vpx=* ) vpx=${1#*=} && shift ;;
@@ -104,7 +103,7 @@ do_simple_print -p "${orange}Warning: We will not accept any issues lacking any 
 
 buildProcess() {
 set_title
-do_simple_print -p '\n\t'"${orange}Starting $bits compilation of all tools$reset"
+do_simple_print -p '\n\t'"${orange}Starting $MSYSTEM compilation of all tools$reset"
 [[ -f $HOME/custom_build_options ]] &&
     echo "Imported custom build options (unsupported)" &&
     source "$HOME"/custom_build_options
@@ -172,7 +171,7 @@ $CC -E -P -include pthread.h - < /dev/null | grep -q MemoryBarrier ||
     grep_and_sed MemoryBarrier "$MINGW_PREFIX/include/pthread.h" 's/MemoryBarrier/__sync_synchronize/g'
 
 set_title "compiling global tools"
-do_simple_print -p '\n\t'"${orange}Starting $bits compilation of global tools${reset}"
+do_simple_print -p '\n\t'"${orange}Starting $MSYSTEM compilation of global tools${reset}"
 
 if [[ $packing = y &&
     ! "$(/opt/bin/upx -V 2> /dev/null | head -1)" = "upx 4.2.2" ]] &&
@@ -458,7 +457,7 @@ if [[ $mediainfo = y || $bmx = y || $curl != n || $cyanrip = y || $gimp = y ]]; 
         [[ $curl = openssl ]] && hide_libressl -R
         if [[ $curl != schannel ]]; then
             _notrequired=true
-            cd_safe "build-$bits"
+            cd_safe "build-$MSYSTEM"
             PATH=/usr/bin log ca-bundle make ca-bundle
             unset _notrequired
             [[ -f lib/ca-bundle.crt ]] &&
@@ -683,7 +682,7 @@ if [[ $ffmpeg != no || $standalone = y ]] && enabled libtesseract; then
         do_checkIfExist
     fi
 
-    do_pacman_install libarchive pango asciidoc
+    do_pacman_install asciidoc libarchive pango omp
     _check=(libtesseract.{,l}a tesseract.pc)
     if do_vcs "$SOURCE_REPO_TESSERACT"; then
         do_pacman_install docbook-xsl
@@ -741,7 +740,7 @@ if [[ $exitearly = EE3 ]]; then
 fi
 
 set_title "compiling audio tools"
-do_simple_print -p '\n\t'"${orange}Starting $bits compilation of audio tools${reset}"
+do_simple_print -p '\n\t'"${orange}Starting $MSYSTEM compilation of audio tools${reset}"
 
 if [[ $ffmpeg != no || $sox = y ]]; then
     do_pacman_install wavpack
@@ -955,7 +954,7 @@ if [[ $ffmpeg != no ]] && enabled libcodec2; then
                 xargs -r sed -ri "s;((lsp|lpc)_to_(lpc|lsp));c2_\1;g"
         fi
         do_cmakeinstall -D{UNITTEST,INSTALL_EXAMPLES}=off \
-            -DCMAKE_INSTALL_BINDIR="$(pwd)/build-$bits/_bin"
+            -DCMAKE_INSTALL_BINDIR="$(pwd)/build-$MSYSTEM/_bin"
         do_checkIfExist
     fi
 fi
@@ -1119,7 +1118,7 @@ if [[ $exitearly = EE4 ]]; then
 fi
 
 set_title "compiling video tools"
-do_simple_print -p '\n\t'"${orange}Starting $bits compilation of video tools${reset}"
+do_simple_print -p '\n\t'"${orange}Starting $MSYSTEM compilation of video tools${reset}"
 
 _deps=(gnutls.pc)
 _check=(librtmp.{a,pc})
@@ -1258,14 +1257,14 @@ if { [[ $rav1e = y ]] || [[ $libavif = y ]] || enabled librav1e; } &&
             CXX="ccache clang++" \
             log "install-rav1e-c" cargo capi install \
             --release --jobs "$cpuCount" --prefix="$LOCALDESTDIR" \
-            --destdir="$PWD/install-$bits"
+            --destdir="$PWD/install-$MSYSTEM"
 
-        # do_install "install-$bits/bin/rav1e.dll" bin-video/
-        # do_install "install-$bits/lib/librav1e.dll.a" lib/
-        do_install "$(find "install-$bits/" -name "librav1e.a")" lib/
-        do_install "$(find "install-$bits/" -name "rav1e.pc")" lib/pkgconfig/
+        # do_install "install-$MSYSTEM/bin/rav1e.dll" bin-video/
+        # do_install "install-$MSYSTEM/lib/librav1e.dll.a" lib/
+        do_install "$(find "install-$MSYSTEM/" -name "librav1e.a")" lib/
+        do_install "$(find "install-$MSYSTEM/" -name "rav1e.pc")" lib/pkgconfig/
         sed -i 's/\\/\//g' "$LOCALDESTDIR/lib/pkgconfig/rav1e.pc" >/dev/null 2>&1
-        do_install "$(find "install-$bits/" -name "rav1e")"/*.h include/rav1e/
+        do_install "$(find "install-$MSYSTEM/" -name "rav1e")"/*.h include/rav1e/
     fi
 
     do_checkIfExist
@@ -1700,7 +1699,7 @@ if [[ $x264 != no ]] ||
                     --disable-{programs,devices,filters,encoders,muxers,debug,sdl2,doc} --enable-gpl
             fi
             do_makeinstall
-            files_exist "${_check[@]}" && touch "build_successful${bits}_light"
+            files_exist "${_check[@]}" && touch "build_successful${MSYSTEM}_light"
             unset_extra_script
 
             _check=("$LOCALDESTDIR"/opt/lightffmpeg/lib/pkgconfig/ffms2.pc bin-video/ffmsindex.exe)
@@ -1724,9 +1723,12 @@ if [[ $x264 != no ]] ||
                 [[ -f config.mak ]] && log "distclean" make distclean
                 do_uninstall "${_check[@]}"
                 create_build_dir
-                log configure ../configure --prefix="$LOCALDESTDIR/opt/lightffmpeg"
+                get_custom_flags userflags
+                ( [[ -n $userflags ]] && export "${userflags[@]}";
+                    log configure ../configure --prefix="$LOCALDESTDIR/opt/lightffmpeg" )
                 do_make install-lib
                 do_checkIfExist
+                unset userflags
             fi
             cd_safe "$LOCALBUILDDIR"/x264-git
         else
@@ -1755,15 +1757,17 @@ if [[ $x264 != no ]] ||
         do_uninstall "${_check[@]}"
         check_custom_patches
         create_build_dir
+        get_custom_flags userflags
         extra_script pre configure
-        PKGCONFIG="$PKG_CONFIG" CFLAGS="${CFLAGS// -O2 / }" \
-            log configure ../configure "${extracommands[@]}"
+        ( [[ -n $userflags ]] && export "${userflags[@]}";
+            PKGCONFIG="$PKG_CONFIG" CFLAGS="${CFLAGS// -O2 / }" \
+            log configure ../configure "${extracommands[@]}" )
         extra_script post configure
         do_make
         do_makeinstall
         do_checkIfExist
         PKG_CONFIG_PATH=$old_PKG_CONFIG_PATH
-        unset extracommands x264_build old_PKG_CONFIG_PATH
+        unset extracommands userflags x264_build old_PKG_CONFIG_PATH
     fi
     unset _bitdepth
 else
@@ -1787,13 +1791,16 @@ if { [[ ! $x265 = n ]] || { [[ $libheif = y ]] || gimp_enabled heif; }; } &&
 
     do_x265_cmake() {
         do_print_progress "Building $1" && shift 1
+        get_custom_flags userflags
         extra_script pre cmake
-        log "cmake" cmake "$(get_first_subdir -f)/source" -G Ninja \
-        -DCMAKE_INSTALL_PREFIX="$LOCALDESTDIR" -DBIN_INSTALL_DIR="$LOCALDESTDIR/bin-video" \
-        -DENABLE_SHARED=OFF -DENABLE_CLI=OFF -DHIGH_BIT_DEPTH=ON \
-        -DENABLE_HDR10_PLUS=ON $xpsupport -DCMAKE_CXX_COMPILER="$LOCALDESTDIR/bin/${CXX#ccache }.bat" \
-        -DCMAKE_TOOLCHAIN_FILE="$LOCALDESTDIR/etc/toolchain.cmake" "$@"
+        ( [[ -n $userflags ]] && export "${userflags[@]}";
+            log "cmake" cmake "$(get_first_subdir -f)/source" -G Ninja \
+            -DCMAKE_INSTALL_PREFIX="$LOCALDESTDIR" -DBIN_INSTALL_DIR="$LOCALDESTDIR/bin-video" \
+            -DENABLE_SHARED=OFF -DENABLE_CLI=OFF -DHIGH_BIT_DEPTH=ON \
+            -DENABLE_HDR10_PLUS=ON $xpsupport -DCMAKE_CXX_COMPILER="$LOCALDESTDIR/bin/${CXX#ccache }.bat" \
+            -DCMAKE_TOOLCHAIN_FILE="$LOCALDESTDIR/etc/toolchain.cmake" "$@" )
         extra_script post cmake
+        unset userflags
         do_ninja
     }
     [[ $standalone = y ]] && cli=-DENABLE_CLI=ON
@@ -2366,7 +2373,7 @@ if [[ $ffmpeg != no ]]; then
             ffmpeg_cflags=$(sed -r 's/ (-O[1-3]|-mtune=\S+)//g' <<< "$CFLAGS")
 
         # shared
-        if [[ $ffmpeg != static ]] && [[ ! -f build_successful${bits}_shared ]]; then
+        if [[ $ffmpeg != static ]] && [[ ! -f build_successful${MSYSTEM}_shared ]]; then
             do_print_progress "Compiling ${bold}shared${reset} FFmpeg"
             do_uninstall bin-video/ffmpegSHARED "${_uninstall[@]}"
             [[ -f config.mak ]] && log "distclean" make distclean
@@ -2379,7 +2386,7 @@ if [[ $ffmpeg != no ]]; then
             sed -ri "s/ ?--($sedflags)=(\S+[^\" ]|'[^']+')//g" config.h
             do_make && do_makeinstall
             cd_safe ..
-            files_exist "${_check[@]}" && touch "build_successful${bits}_shared"
+            files_exist "${_check[@]}" && touch "build_successful${MSYSTEM}_shared"
         fi
 
         # static
@@ -2457,14 +2464,14 @@ check_mplayer_updates() {
 
     if [[ $oldHead != "$newHead" || -f custom_updated ]]; then
         touch recently_updated
-        rm -f ./build_successful{32,64}bit{,_*}
-        if [[ $build32$build64$bits == yesyes64bit ]]; then
+        rm -f ./build_successful$MSYSTEM{,_*}
+        if [[ $msysEnv$MSYSTEM == ALLUCRT64 ]]; then
             new_updates="yes"
             new_updates_packages="$new_updates_packages [mplayer]"
         fi
         printf 'mplayer\n' >> "$LOCALBUILDDIR"/newchangelog
         do_print_status "┌ mplayer svn" "$orange" "Updates found"
-    elif [[ -f recently_updated && ! -f build_successful$bits ]]; then
+    elif [[ -f recently_updated && ! -f build_successful$MSYSTEM ]]; then
         do_print_status "┌ mplayer svn" "$orange" "Recently updated"
     elif ! files_exist "${_check[@]}"; then
         do_print_status "┌ mplayer svn" "$orange" "Files missing"
@@ -2576,7 +2583,9 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
         unset _ver
     elif ! mpv_disabled vapoursynth; then
         mpv_disable vapoursynth
-        do_simple_print "${red}Update to at least Vapoursynth R24 to use with mpv${reset}"
+        [[ $bits = 32bit ]] &&
+            do_simple_print "${orange}Vapoursynth is known to be broken on 32-bit and will be disabled"'!'"${reset}" ||
+            do_simple_print "${red}Update to at least Vapoursynth R24 to use with mpv${reset}"
     fi
 
     _check=(mujs.{h,pc} libmujs.a)
@@ -2590,9 +2599,11 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
             _check+=(bin-global/mujs.exe)
             sed -i "s;-lreadline;$($PKG_CONFIG --libs readline);g" Makefile
         fi
+        get_custom_flags userflags
         extra_script pre make
-        TEMP="${TEMP:-/tmp}" CPATH="${CPATH:-}" log "make" "$(command -v make)" \
-            "${mujs_targets[@]}" prefix="$LOCALDESTDIR" bindir="$LOCALDESTDIR/bin-global"
+        ( [[ -n $userflags ]] && export "${userflags[@]}";
+            TEMP="${TEMP:-/tmp}" CPATH="${CPATH:-}" log "make" "$(command -v make)" \
+            "${mujs_targets[@]}" prefix="$LOCALDESTDIR" bindir="$LOCALDESTDIR/bin-global" )
         extra_script post make
         extra_script pre install
         [[ $standalone != n ]] && do_install build/release/mujs "$LOCALDESTDIR/bin-global"
@@ -2602,7 +2613,7 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
         extra_script post install
         grep_or_sed "Requires.private:" "$LOCALDESTDIR/lib/pkgconfig/mujs.pc" \
             's;Version:.*;&\nRequires.private: readline;'
-        unset mujs_targets
+        unset mujs_targets userflags
         do_checkIfExist
     fi
 
@@ -2807,7 +2818,7 @@ if [[ $cyanrip = y ]]; then
                 --enable-filter=hdcd \
                 "${cyan_ffmpeg_opts[@]}"
             do_makeinstall
-            files_exist "${_check[@]}" && touch ../"build_successful${bits}_cyan"
+            files_exist "${_check[@]}" && touch ../"build_successful${MSYSTEM}_cyan"
         fi
         unset cyan_ffmpeg_opts
         PKG_CONFIG_PATH=$LOCALDESTDIR/opt/cyanffmpeg/lib/pkgconfig:$PKG_CONFIG_PATH
@@ -3093,13 +3104,15 @@ _check=(bin-video/ffmbc.exe)
 if [[ $ffmbc = y ]] && do_vcs "https://github.com/bcoudurier/FFmbc.git#branch=ffmbc"; then # no other branch
     _notrequired=true
     create_build_dir
-    log configure ../configure --target-os=mingw32 --enable-gpl \
+    get_custom_flags userflags
+    ( [[ -n $userflags ]] && export "${userflags[@]}";
+        log configure ../configure --target-os=mingw32 --enable-gpl \
         --disable-{dxva2,ffprobe} --extra-cflags=-DNO_DSHOW_STRSAFE \
-        --cc="$CC" --ld="$CXX"
+        --cc="$CC" --ld="$CXX" )
     do_make
     do_install ffmbc.exe bin-video/
     do_checkIfExist
-    unset _notrequired
+    unset _notrequired userflags
 fi
 
 # build GIMP in its own folder as to not mix static and shared libraries
@@ -3917,19 +3930,30 @@ if [[ $gimp = y ]]; then
     source "$LOCALBUILDDIR"/media-suite_helper.sh
 fi
 
-do_simple_print -p "${orange}Finished $bits compilation of all tools${reset}"
+do_simple_print -p "${orange}Finished $MSYSTEM compilation of all tools${reset}"
 }
 
 run_builds() {
     new_updates=no
     new_updates_packages=""
-    if [[ $build32 = yes ]]; then
-        source /local32/etc/profile2.local
+    if [[ $msysEnv == ALL || $msysEnv == MINGW || $msysEnv == MINGW32 ]]; then
+        source /local32-mingw/etc/profile2.local
         buildProcess
     fi
-
-    if [[ $build64 = yes ]]; then
-        source /local64/etc/profile2.local
+    if [[ $msysEnv == ALL || $msysEnv == MINGW || $msysEnv == MINGW64 ]]; then
+        source /local64-mingw/etc/profile2.local
+        buildProcess
+    fi
+    if [[ $msysEnv == ALL || $msysEnv == CLANG || $msysEnv == CLANG32 ]]; then
+        source /local32-clang/etc/profile2.local
+        buildProcess
+    fi
+    if [[ $msysEnv == ALL || $msysEnv == CLANG || $msysEnv == CLANG64 ]]; then
+        source /local64-clang/etc/profile2.local
+        buildProcess
+    fi
+    if [[ $msysEnv == ALL || $msysEnv == UCRT64 ]]; then
+        source /local64-ucrt/etc/profile2.local
         buildProcess
     fi
 }
