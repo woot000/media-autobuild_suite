@@ -591,6 +591,7 @@ fi
 
 if { [[ $openexr = y ]] || { gimp_enabled openexr || gegl_enabled openexr; }; }; then
     do_pacman_install libdeflate
+    sed -i 's;message(FATAL_ERROR \"The;message(\"The;' "$MINGW_PREFIX"/lib/cmake/libdeflate/libdeflate-targets.cmake
     _check=(lib{Iex,Ilmthread,OpenEXR{,Core,Util}}-3_3.a libImath-3_2.a
         {Imath,OpenEXR}.pc Imath/ImathConfig.h OpenEXR/openexr.h)
     [[ $openexr = y || $standalone = y ]] &&
@@ -602,7 +603,6 @@ if { [[ $openexr = y ]] || { gimp_enabled openexr || gegl_enabled openexr; }; };
         # force cmake to link libdeflate statically
         sed -i 's;EXR_DEFLATE_LIB libdeflate::libdeflate_shared;EXR_DEFLATE_LIB libdeflate::libdeflate_static;' \
             cmake/OpenEXRSetup.cmake
-        sed -i 's;message(FATAL_ERROR \"The;message(\"The;' "$MINGW_PREFIX"/lib/cmake/libdeflate/libdeflate-targets.cmake
         do_cmakeinstall global -DBUILD_TESTING=OFF -DOPENEXR_BUILD_EXAMPLES=OFF "${extracommands[@]}"
         do_checkIfExist
     fi
@@ -3268,7 +3268,7 @@ if [[ $gimp = y ]]; then
             CFLAGS="${CFLAGS/O2/O3} -Wno-incompatible-pointer-types" LDFLAGS="${LDFLAGS/O2/O3} ${_extra_ldflags}" \
                 do_make
             MSYS=winsymlinks:lnk do_makeinstall # ln -s fails if not set
-            cp -rf "../build-${bits}/${_gimp_dir}/lib/python3.11/lib-dynload" "${_gimp_dir}/lib/python3.11" # dir does not install correctly
+            cp -rf "../build-${MSYSTEM}/${_gimp_dir}/lib/python3.11/lib-dynload" "${_gimp_dir}/lib/python3.11" # dir does not install correctly
             # files are removed and copied to match what's in bin from GIMP's windows installer
             rm -f ${_gimp_dir}/bin/{{2to,idle,pydoc}3,python3{,.11}-config,python3.exe}
             rm -f ${_gimp_dir}/lib/pkgconfig/python3{,-embed}.pc
@@ -3702,6 +3702,7 @@ if [[ $gimp = y ]]; then
     fi
     unset _poppler_data_ver
 
+    sed -i 's;message(FATAL_ERROR "The;message("The;' ${MINGW_PREFIX}/lib/cmake/CURL/CURLTargets.cmake
     _deps=(../lib/lib{curl,openjp2,tiff}.a lib{cairo,lcms2}.dll.a)
     _check=(libpoppler{,-cpp,-glib}.a poppler{,-cpp,-glib}.pc)
     if do_vcs "$SOURCE_REPO_POPPLER"; then
