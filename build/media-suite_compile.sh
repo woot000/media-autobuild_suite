@@ -592,6 +592,7 @@ fi
 
 if { [[ $openexr = y ]] || { gimp_enabled openexr || gegl_enabled openexr; }; }; then
     do_pacman_install libdeflate
+    sed -i 's;message(FATAL_ERROR \"The;message(\"The;' "$MINGW_PREFIX"/lib/cmake/libdeflate/libdeflate-targets.cmake
     _check=(lib{Iex,Ilmthread,OpenEXR{,Core,Util}}-3_3.a libImath-3_2.a
         {Imath,OpenEXR}.pc Imath/ImathConfig.h OpenEXR/openexr.h)
     [[ $openexr = y || $standalone = y ]] &&
@@ -603,7 +604,6 @@ if { [[ $openexr = y ]] || { gimp_enabled openexr || gegl_enabled openexr; }; };
         # force cmake to link libdeflate statically
         sed -i 's;EXR_DEFLATE_LIB libdeflate::libdeflate_shared;EXR_DEFLATE_LIB libdeflate::libdeflate_static;' \
             cmake/OpenEXRSetup.cmake
-        sed -i 's;message(FATAL_ERROR \"The;message(\"The;' "$MINGW_PREFIX"/lib/cmake/libdeflate/libdeflate-targets.cmake
         do_cmakeinstall global -DBUILD_TESTING=OFF -DOPENEXR_BUILD_EXAMPLES=OFF "${extracommands[@]}"
         do_checkIfExist
     fi
@@ -3717,6 +3717,7 @@ if [[ $gimp = y ]]; then
     fi
     unset _poppler_data_ver
 
+    sed -i 's;message(FATAL_ERROR "The;message("The;' ${MINGW_PREFIX}/lib/cmake/CURL/CURLTargets.cmake
     _deps=(../lib/lib{curl,openjp2,tiff}.a lib{cairo,lcms2}.dll.a)
     _check=(libpoppler{,-cpp,-glib}.a poppler{,-cpp,-glib}.pc)
     if do_vcs "$SOURCE_REPO_POPPLER"; then
