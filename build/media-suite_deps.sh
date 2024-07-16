@@ -1,5 +1,8 @@
 #!/bin/bash
 
+cpython_major_ver=3.11
+cpython_minor_ver=.9
+
 # Dependency References
 SOURCE_REPO_AMF=https://github.com/GPUOpen-LibrariesAndSDKs/AMF.git
 SOURCE_REPO_ANGLE=https://chromium.googlesource.com/angle/angle
@@ -10,7 +13,7 @@ SOURCE_REPO_AVISYNTH=https://github.com/AviSynth/AviSynthPlus.git
 SOURCE_REPO_BABL=https://gitlab.gnome.org/GNOME/babl.git
 SOURCE_REPO_CAIRO=https://gitlab.freedesktop.org/cairo/cairo.git
 SOURCE_REPO_CODEC2=https://github.com/drowe67/codec2.git
-SOURCE_REPO_CPYTHON=https://github.com/msys2-contrib/cpython-mingw.git#branch=mingw-v3.11.9
+SOURCE_REPO_CPYTHON=https://github.com/msys2-contrib/cpython-mingw.git#branch=mingw-v${cpython_major_ver}${cpython_minor_ver}
 SOURCE_REPO_CURL=https://github.com/curl/curl.git
 SOURCE_REPO_CYANRIP=https://github.com/cyanreg/cyanrip.git
 SOURCE_REPO_DAV1D=https://code.videolan.org/videolan/dav1d.git
