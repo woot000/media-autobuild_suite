@@ -1872,7 +1872,7 @@ build_libheif() {
     local dir=""
     local heifexec=n
     [[ $libheif = y || $standalone = y ]] && heifexec=y
-    [[ -n $1 ]] && [[ $1 = gimp ]] && dir=../lib/ && heifexec=n && cmd=(do_cmakeinstallgimpdir)
+    [[ $1 = gimp ]] && dir=../lib/ && heifexec=n && cmd=(do_cmakeinstallgimpdir)
 
     do_pacman_install libde265 libjpeg-turbo
     sed -i 's|@LIBS_PRIVATE@||g' "$MINGW_PREFIX/lib/pkgconfig/libde265.pc"
@@ -1884,13 +1884,12 @@ build_libheif() {
     [[ $heifexec != n ]] && _check+=(bin-global/heif-{convert,enc,info,thumbnailer}.exe)
     if do_vcs "$SOURCE_REPO_LIBHEIF"; then
         do_uninstall {include,lib/cmake}/libheif "${_check[@]}"
-        extracommands=(-DWITH_EXAMPLES=OFF)
+        extracommands=(-DWITH_{EXAMPLES,GDK_PIXBUF}=OFF)
         [[ $heifexec != n ]] && extracommands=(-DWITH_EXAMPLES=ON)
         { [[ $libheif = y && $1 != gimp ]] || gimp_enabled jpeg2000; } && 
             extracommands+=(-DWITH_OpenJPEG_{DE,EN}CODER=ON) || extracommands+=(-DWITH_OpenJPEG_{DE,EN}CODER=OFF)
         [[ $other265 = y ]] && pc_exists "kvazaar" && extracommands+=(-DWITH_KVAZAAR=ON)
         [[ $bits = 64bit && $svtav1 = y ]] && pc_exists "SvtAv1Enc" && extracommands+=(-DWITH_SvtEnc=ON)
-        [[ $1 = gimp ]] && extracommands+=(-DWITH_GDK_PIXBUF=ON)
         CXXFLAGS+=" -DKVZ_STATIC_LIB" ${cmd[@]} -DWITH_{AOM_{DE,EN}CODER,DAV1D,{LIBDE,X}265}=ON  \
             -DWITH_{DEFLATE_HEADER_COMPRESSION,JPEG_{DE,EN}CODER,UNCOMPRESSED_CODEC}=ON \
             -D{BUILD_TESTING,ENABLE_PLUGIN_LOADING}=OFF \
@@ -3220,12 +3219,12 @@ if [[ $gimp = y ]]; then
         do_ninjainstall
     }
 
-    export PYTHONPATH="${_gimp_dir}/lib/python3.11/site-packages:${MINGW_PREFIX}/lib/python3.11/site-packages"
-    _check=(bin/python{{,3}{,w},3.11}.exe bin/libpython3{,.11}.dll python-3.11{,-embed}.pc
-        lib/python3.11/lib-dynload/math.cp311-mingw_${MSYSTEM_CARCH}$([[ $CC = *clang* ]] && echo _clang).pyd)
+    export PYTHONPATH="${_gimp_dir}/lib/python${cpython_major_ver}/site-packages:${MINGW_PREFIX}/lib/python${cpython_major_ver}/site-packages"
+    _check=(bin/python{{,3}{,w},${cpython_major_ver}}.exe bin/libpython3{,${cpython_major_ver: +1}}.dll python-${cpython_major_ver}{,-embed}.pc
+        lib/python${cpython_major_ver}/lib-dynload/math.cp${cpython_major_ver//.}-mingw_${MSYSTEM_CARCH}$([[ $CC = *clang* ]] && echo _clang).pyd)
     if gimp_enabled python; then
         if do_vcs "$SOURCE_REPO_CPYTHON"; then
-            do_uninstall all {include,lib}/python3.11 "${_check[@]}"
+            do_uninstall all {include,lib}/python${cpython_major_ver} "${_check[@]}"
             sed -i "s;-municode -static;-municode -Wno-incompatible-pointer-types -static;" Makefile.pre.in
             local _extra_ldflags=("-Wno-incompatible-pointer-types")
             [[ $bits = 32bit ]] && _extra_ldflags+=("-Wl,--large-address-aware")
@@ -3237,11 +3236,12 @@ if [[ $gimp = y ]]; then
             CFLAGS="${CFLAGS/O2/O3} -Wno-incompatible-pointer-types" LDFLAGS="${LDFLAGS/O2/O3} ${_extra_ldflags}" \
                 do_make
             MSYS=winsymlinks:lnk do_makeinstall # ln -s fails if not set
-            cp -rf "../build-${MSYSTEM}/${_gimp_dir}/lib/python3.11/lib-dynload" "${_gimp_dir}/lib/python3.11" # dir does not install correctly
+            cp -rf "../build-${MSYSTEM}/${_gimp_dir}/lib/python${cpython_major_ver}/lib-dynload" \
+                "${_gimp_dir}/lib/python${cpython_major_ver}" # dir does not install correctly
             # files are removed and copied to match what's in bin from GIMP's windows installer
-            rm -f ${_gimp_dir}/bin/{{2to,idle,pydoc}3,python3{,.11}-config,python3.exe}
+            rm -f ${_gimp_dir}/bin/{{2to,idle,pydoc}3,python3{,${cpython_major_ver: +1}}-config,python3.exe}
             rm -f ${_gimp_dir}/lib/pkgconfig/python3{,-embed}.pc
-            cp -f ${_gimp_dir}/bin/python3{.11,}.exe
+            cp -f ${_gimp_dir}/bin/python3{${cpython_major_ver: +1},}.exe
             cp -f ${_gimp_dir}/bin/python{3,}.exe
             cp -f ${_gimp_dir}/bin/python{3,}w.exe
             do_checkIfExist
@@ -3249,7 +3249,7 @@ if [[ $gimp = y ]]; then
         fi
     else
         if files_exist "${_check[@]}"; then
-            do_uninstall all {include,lib}/python3.11 "${_check[@]}"
+            do_uninstall all {include,lib}/python${cpython_major_ver} "${_check[@]}"
         fi
     fi
 
@@ -3272,7 +3272,7 @@ if [[ $gimp = y ]]; then
     do_pacman_install pcre2
     _check=("${_glib_check[@]}" gobject-introspection{,-no-export}-1.0.pc bin/g-ir-{compiler,generate,inspect}.exe
         bin/g-ir-scanner bin/libgirepository-1.0-1.dll gobject-introspection-1.0/giversion.h
-        lib/gobject-introspection/giscanner/_giscanner.cp311-mingw_${MSYSTEM_CARCH}$([[ $CC = *clang* ]] && echo _clang).pyd)
+        lib/gobject-introspection/giscanner/_giscanner.cp${cpython_major_ver//.}-mingw_${MSYSTEM_CARCH}$([[ $CC = *clang* ]] && echo _clang).pyd)
     if do_vcs "$SOURCE_REPO_GOBJECT_INTROSPECTION"; then
         do_uninstall all {include,share}/gobject-introspection-1.0 \
             lib/gobject-introspection share/gir-1.0/gir-1.2.rnc \
@@ -3323,7 +3323,7 @@ if [[ $gimp = y ]]; then
     unset _vala_hash
 
     _check=(liblensfun.a lensfun.pc lensfun/lensfun.h)
-    gimp_enabled python && _check+=(lib/python3.11/site-packages/lensfun-0.3.99-py3.11.egg)
+    gimp_enabled python && _check+=(lib/python${cpython_major_ver}/site-packages/lensfun-0.3.99-py${cpython_major_ver}.egg)
     if gegl_enabled lensfun && _deps=(libglib-2.0.dll.a) &&
         do_vcs "$SOURCE_REPO_LENSFUN"; then
         do_uninstall "bin/lensfun" "${_check[@]}"
@@ -3337,9 +3337,10 @@ if [[ $gimp = y ]]; then
         fi
         do_patch "https://github.com/m-ab-s/mabs-patches/raw/master/lensfun/0002-CMake-don-t-add-glib2-s-includes-as-SYSTEM-dirs.patch" am
         grep_or_sed Libs.private libs/lensfun/lensfun.pc.cmake '/Libs:/ a\Libs.private: -lstdc++'
-        do_cmakeinstallgimpdir -DCMAKE_INSTALL_DATAROOTDIR="$_gimp_dir/bin" \
+        do_cmakeinstallgimpdir -DPython3_EXECUTABLE="${MINGW_PREFIX}/bin/python.exe" \
+            -DCMAKE_INSTALL_DATAROOTDIR="$_gimp_dir/bin" -DBUILD_STATIC=on \
             -DBUILD_{TESTS,LENSTOOL,DOC}=off -DINSTALL_HELPER_SCRIPTS=off \
-            -DBUILD_STATIC=on "${extracommands[@]}"
+            "${extracommands[@]}"
         do_checkIfExist
     fi
 
@@ -3402,23 +3403,23 @@ if [[ $gimp = y ]]; then
         do_checkIfExist
     fi
 
-    _check=(py3cairo.pc pycairo/py3cairo.h lib/python3.11/site-packages/cairo/__init__.py)
+    _check=(py3cairo.pc pycairo/py3cairo.h lib/python${cpython_major_ver}/site-packages/cairo/__init__.py)
     if do_vcs "$SOURCE_REPO_PYCAIRO"; then
-        do_uninstall "${_check[@]}" lib/python3.11/site-packages/{cairo,pycairo*info}
+        do_uninstall "${_check[@]}" lib/python${cpython_major_ver}/site-packages/{cairo,pycairo*info}
         do_mesoninstallshared
         log "python compileall" ${MINGW_PREFIX}/bin/python -m compileall \
-            -o 0 -o 1 -o 2 "${_gimp_dir}/lib/python3.11/site-packages/cairo"*
+            -o 0 -o 1 -o 2 "${_gimp_dir}/lib/python${cpython_major_ver}/site-packages/cairo"*
         do_checkIfExist
     fi
 
-    _check=(pygobject-3.0.pc pygobject-3.0/pygobject.h lib/python3.11/site-packages/{gi,pygtkcompat}/__init__.py)
+    _check=(pygobject-3.0.pc pygobject-3.0/pygobject.h lib/python${cpython_major_ver}/site-packages/{gi,pygtkcompat}/__init__.py)
     if do_vcs "$SOURCE_REPO_PYGOBJECT"; then
-        do_uninstall "${_check[@]}" lib/python3.11/site-packages/{gi,pygtkcompat,PyGObject*info}
+        do_uninstall "${_check[@]}" lib/python${cpython_major_ver}/site-packages/{gi,pygtkcompat,PyGObject*info}
         do_patch "https://gitlab.gnome.org/GNOME/pygobject/-/merge_requests/211.patch"
         sed -e "s;win;mingw;" -e "s;\"girepository-1.0-1.dll\";\"libgirepository-1.0-1.dll\";" -i gi/__init__.py
         do_mesoninstallshared
         log "python compileall" ${MINGW_PREFIX}/bin/python -m compileall \
-            -o 0 -o 1 -o 2 "${_gimp_dir}/lib/python3.11/site-packages/gi"*
+            -o 0 -o 1 -o 2 "${_gimp_dir}/lib/python${cpython_major_ver}/site-packages/gi"*
         do_checkIfExist
     fi
 
@@ -3511,7 +3512,7 @@ if [[ $gimp = y ]]; then
         do_checkIfExist
     fi
 
-    gimp_enabled heif && build_libheif gimp
+    gimp_enabled heif && CXXFLAGS+=" -I$(cygpath -wm $_gimp_dir/../include)" build_libheif gimp
 
     _deps=(lib{cairo,gdk_pixbuf-2.0,pango-1.0}.dll.a)
     _check=(bin/{librsvg-2-2.dll,rsvg-convert.exe} librsvg-2.dll.a librsvg-2.0.pc librsvg-2.0/librsvg/rsvg.h)
@@ -3615,8 +3616,8 @@ if [[ $gimp = y ]]; then
     fi
 
     _deps=(libexiv2.a libglib-2.0.dll.a)
-    _check=(bin/libgexiv2-2.dll libgexiv2.dll.a gexiv2.pc gexiv2/gexiv2.h)
-    gimp_enabled python && _check+=(lib/python3.11/site-packages/gi/overrides/GExiv2.py)
+    _check=(bin/libgexiv2-4.dll libgexiv2.dll.a gexiv2.pc gexiv2/gexiv2.h)
+    gimp_enabled python && _check+=(lib/python${cpython_major_ver}/site-packages/gi/overrides/GExiv2.py)
     if do_vcs "$SOURCE_REPO_GEXIV2"; then
         do_uninstall include/gexiv2 "${_check[@]}"
         local _extra_ldflags=("$($PKG_CONFIG --libs --static exiv2)")
@@ -3714,7 +3715,7 @@ if [[ $gimp = y ]]; then
             -e "s;shared_library;static_library;" -i libappstream-glib/meson.build
         # introspection disabled, "cannot find -lappstream-glib: No such file or directory"
         LDFLAGS+=" $($PKG_CONFIG --libs --static libarchive libbrotlidec libnghttp2)" \
-            do_mesoninstall  -D{alpm,builder,dep11,gtk-doc,introspection,man,rpm,stemmer}=false
+            do_mesoninstall  -D{alpm,builder,dep11,gtk-doc,introspection,man,rpm}=false
         do_checkIfExist
     fi
 
@@ -3796,12 +3797,14 @@ if [[ $gimp = y ]]; then
         fi
 
         do_pacman_install libpaper jbig2dec
+        local _ghostscript_ver=10.03.1
+        local _ghostscript_hash=157212edc96b8ccc409475dce2e49833fb4427f150c455258ded9632c106abee 
         _deps=(../lib/lib{openjp2,png,tiff}.a libidn.a libgdk_pixbuf-2.0.dll.a)
         _check=(bin/gs.exe libgs.a ghostscript/iapi.h)
         if files_exist "${_check[@]}"; then
-            do_print_status "ghostscript-10.02.1" "$green" "Up-to-date"
-        elif do_wget -h 8c58c948b0721becefcd0029c8db95f9bb3268affc25ea01d4c5a6b07fa1ab08 \
-            "https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download/gs10021/ghostscript-10.02.1.tar.xz"; then
+            do_print_status "ghostscript-${_ghostscript_ver}" "$green" "Up-to-date"
+        elif do_wget -h ${_ghostscript_hash} \
+            "https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download/gs${_ghostscript_ver//.}/ghostscript-${_ghostscript_ver}.tar.xz"; then
             do_uninstall {include,share}/ghostscript "${_check[@]}"
             extracommands=()
             gimp_enabled jpeg2000 && extracommands+=("--enable-openjpeg")
@@ -3827,6 +3830,7 @@ if [[ $gimp = y ]]; then
             do_install ../psi/i{api,errors}.h include/ghostscript/
             do_checkIfExist
         fi
+        unset _ghostscript_{hash,ver}
     fi
 
     do_pacman_install discount
@@ -3854,8 +3858,8 @@ if [[ $gimp = y ]]; then
         do_checkIfExist
     fi
 
-    local _adwaita_ver=46.0
-    local _adwaita_hash=4bcb539bd75d64da385d6fa08cbaa9ddeaceb6ac8e82b85ba6c41117bf5ba64e 
+    local _adwaita_ver=46.2
+    local _adwaita_hash=beb126b9429339ba762e0818d5e73b2c46f444975bf80076366eae2d0f96b5cb 
     _check=(adwaita-icon-theme.pc share/icons/Adwaita/index.theme)
     if do_pkgConfig "adwaita-icon-theme = ${_adwaita_ver}" && do_wget -h ${_adwaita_hash} \
         "https://download.gnome.org/sources/adwaita-icon-theme/${_adwaita_ver:0:2}/adwaita-icon-theme-${_adwaita_ver}.tar.xz"; then
