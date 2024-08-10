@@ -1905,6 +1905,8 @@ build_libheif() {
     [[ $heifexec != n ]] && _check+=(bin-global/heif-{convert,enc,info,thumbnailer}.exe)
     if do_vcs "$SOURCE_REPO_LIBHEIF"; then
         do_uninstall {include,lib/cmake}/libheif "${_check[@]}"
+        do_patch "https://patch-diff.githubusercontent.com/raw/strukturag/libheif/pull/1261.patch" am
+        do_patch "https://patch-diff.githubusercontent.com/raw/strukturag/libheif/pull/1263.patch" am
         extracommands=(-DWITH_{EXAMPLES,GDK_PIXBUF}=OFF)
         [[ $heifexec != n ]] && extracommands=(-DWITH_EXAMPLES=ON)
         { [[ $libheif = y && $1 != gimp ]] || gimp_enabled jpeg2000; } && 
@@ -3268,35 +3270,29 @@ if [[ $gimp = y ]]; then
     export PYTHONPATH="${_gimp_dir}/lib/python${cpython_major_ver}/site-packages:${MINGW_PREFIX}/lib/python${cpython_major_ver}/site-packages"
     _check=(bin/python{{,3}{,w},${cpython_major_ver}}.exe bin/libpython3{,${cpython_major_ver: +1}}.dll python-${cpython_major_ver}{,-embed}.pc
         lib/python${cpython_major_ver}/lib-dynload/math.cp${cpython_major_ver//.}-mingw_${MSYSTEM_CARCH}$([[ $CC = *clang* ]] && echo _clang).pyd)
-    if gimp_enabled python; then
-        if do_vcs "$SOURCE_REPO_CPYTHON"; then
-            do_uninstall all {include,lib}/python${cpython_major_ver} "${_check[@]}"
-            sed -i "s;-municode -static;-municode -Wno-incompatible-pointer-types -static;" Makefile.pre.in
-            local _extra_ldflags=("-Wno-incompatible-pointer-types")
-            [[ $bits = 32bit ]] && _extra_ldflags+=("-Wl,--large-address-aware")
-            do_autoreconf
-            create_build_dir
-            CFLAGS="${CFLAGS/O2/O3} -Wno-incompatible-pointer-types" LDFLAGS="${LDFLAGS/O2/O3} ${_extra_ldflags}" \
-                config_path=.. do_configure --enable-{optimizations,shared} \
-                --with-system-{expat,libmpdec} --without-ensurepip
-            CFLAGS="${CFLAGS/O2/O3} -Wno-incompatible-pointer-types" LDFLAGS="${LDFLAGS/O2/O3} ${_extra_ldflags}" \
-                do_make
-            MSYS=winsymlinks:lnk do_makeinstall # ln -s fails if not set
-            cp -rf "../build-${bits}/${_gimp_dir}/lib/python${cpython_major_ver}/lib-dynload" \
-                "${_gimp_dir}/lib/python${cpython_major_ver}" # dir does not install correctly
-            # files are removed and copied to match what's in bin from GIMP's windows installer
-            rm -f ${_gimp_dir}/bin/{{2to,idle,pydoc}3,python3{,${cpython_major_ver: +1}}-config,python3.exe}
-            rm -f ${_gimp_dir}/lib/pkgconfig/python3{,-embed}.pc
-            cp -f ${_gimp_dir}/bin/python3{${cpython_major_ver: +1},}.exe
-            cp -f ${_gimp_dir}/bin/python{3,}.exe
-            cp -f ${_gimp_dir}/bin/python{3,}w.exe
-            do_checkIfExist
-            unset _extra_ldflags
-        fi
-    else
-        if files_exist "${_check[@]}"; then
-            do_uninstall all {include,lib}/python${cpython_major_ver} "${_check[@]}"
-        fi
+    if do_vcs "$SOURCE_REPO_CPYTHON"; then
+        do_uninstall all {include,lib}/python${cpython_major_ver} "${_check[@]}"
+        sed -i "s;-municode -static;-municode -Wno-incompatible-pointer-types -static;" Makefile.pre.in
+        local _extra_ldflags=("-Wno-incompatible-pointer-types")
+        [[ $bits = 32bit ]] && _extra_ldflags+=("-Wl,--large-address-aware")
+        do_autoreconf
+        create_build_dir
+        CFLAGS="${CFLAGS/O2/O3} -Wno-incompatible-pointer-types" LDFLAGS="${LDFLAGS/O2/O3} ${_extra_ldflags}" \
+            config_path=.. do_configure --enable-{optimizations,shared} \
+            --with-system-{expat,libmpdec} --without-ensurepip
+        CFLAGS="${CFLAGS/O2/O3} -Wno-incompatible-pointer-types" LDFLAGS="${LDFLAGS/O2/O3} ${_extra_ldflags}" \
+            do_make
+        MSYS=winsymlinks:lnk do_makeinstall # ln -s fails if not set
+        cp -rf "../build-${bits}/${_gimp_dir}/lib/python${cpython_major_ver}/lib-dynload" \
+            "${_gimp_dir}/lib/python${cpython_major_ver}" # dir does not install correctly
+        # files are removed and copied to match what's in bin from GIMP's windows installer
+        rm -f ${_gimp_dir}/bin/{{2to,idle,pydoc}3,python3{,${cpython_major_ver: +1}}-config,python3.exe}
+        rm -f ${_gimp_dir}/lib/pkgconfig/python3{,-embed}.pc
+        cp -f ${_gimp_dir}/bin/python3{${cpython_major_ver: +1},}.exe
+        cp -f ${_gimp_dir}/bin/python{3,}.exe
+        cp -f ${_gimp_dir}/bin/python{3,}w.exe
+        do_checkIfExist
+        unset _extra_ldflags
     fi
 
     _check=(bin/luajit.exe libluajit-5.1.dll.a luajit.pc luajit-2.1/lua.h)
@@ -3368,25 +3364,19 @@ if [[ $gimp = y ]]; then
     fi
     unset _vala_hash
 
-    _check=(liblensfun.a lensfun.pc lensfun/lensfun.h)
-    gimp_enabled python && _check+=(lib/python${cpython_major_ver}/site-packages/lensfun-0.3.99-py${cpython_major_ver}.egg)
+    _check=(liblensfun.a lensfun.pc lensfun/lensfun.h
+        lib/python${cpython_major_ver}/site-packages/lensfun-0.3.99-py${cpython_major_ver}.egg)
     if gegl_enabled lensfun && _deps=(libglib-2.0.dll.a) &&
         do_vcs "$SOURCE_REPO_LENSFUN"; then
         do_uninstall "bin/lensfun" "${_check[@]}"
-        extracommands=()
-        if gimp_enabled python; then
-            do_pacman_install python-setuptools
-            grep_or_sed sys apps/lensfun/__init__.py.in '/import os/ a\import sys'
-            extracommands+=("-DINSTALL_PYTHON_MODULE=ON")
-        else
-            extracommands+=("-DINSTALL_PYTHON_MODULE=OFF")
-        fi
+        do_pacman_install python-setuptools
         do_patch "https://github.com/m-ab-s/mabs-patches/raw/master/lensfun/0002-CMake-don-t-add-glib2-s-includes-as-SYSTEM-dirs.patch" am
+        grep_or_sed sys apps/lensfun/__init__.py.in '/import os/ a\import sys'
         grep_or_sed Libs.private libs/lensfun/lensfun.pc.cmake '/Libs:/ a\Libs.private: -lstdc++'
         do_cmakeinstallgimpdir -DPython3_EXECUTABLE="${MINGW_PREFIX}/bin/python.exe" \
             -DCMAKE_INSTALL_DATAROOTDIR="$_gimp_dir/bin" -DBUILD_STATIC=on \
             -DBUILD_{TESTS,LENSTOOL,DOC}=off -DINSTALL_HELPER_SCRIPTS=off \
-            "${extracommands[@]}"
+            -DINSTALL_PYTHON_MODULE=ON
         do_checkIfExist
     fi
 
@@ -3662,16 +3652,14 @@ if [[ $gimp = y ]]; then
     fi
 
     _deps=(libexiv2.a libglib-2.0.dll.a)
-    _check=(bin/libgexiv2-4.dll libgexiv2.dll.a gexiv2.pc gexiv2/gexiv2.h)
-    gimp_enabled python && _check+=(lib/python${cpython_major_ver}/site-packages/gi/overrides/GExiv2.py)
+    _check=(bin/libgexiv2-4.dll libgexiv2.dll.a gexiv2.pc gexiv2/gexiv2.h
+        lib/python${cpython_major_ver}/site-packages/gi/overrides/GExiv2.py)
     if do_vcs "$SOURCE_REPO_GEXIV2"; then
         do_uninstall include/gexiv2 "${_check[@]}"
         local _extra_ldflags=("$($PKG_CONFIG --libs --static exiv2)")
-        local extracommands=("-Dpython3=false")
-        gimp_enabled python && extracommands=("-Dpython3=true")
         [[ $CC = *clang* ]] && _extra_ldflags+=("-Wl,--allow-multiple-definition") # for libc++
         LDFLAGS+=" ${_extra_ldflags[@]}" \
-            do_mesoninstallshared -D{introspection,vapi}=true -D{gtk_doc,tests,tools}=false "${extracommands[@]}"
+            do_mesoninstallshared -D{introspection,python3,vapi}=true -D{gtk_doc,tests,tools}=false
         do_checkIfExist
     fi
 

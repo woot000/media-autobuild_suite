@@ -165,7 +165,7 @@ set gimp_options_full=aa cairo-pdf fits ghostscript heif ^
 ilbm jpeg2000 jpeg-xl mng openexr openmp webp wmf xpm
 
 :: optional language plug-ins
-set gimp_options_plugins=lua python vala
+set gimp_options_plugins=lua vala
 
 set iniOptions=arch license2 vpx2 x2643 x2652 other265 flac fdkaac mediainfo ^
 soxB ffmpegB2 ffmpegUpdate ffmpegChoice mp4box rtmpdump mplayer2 mpv cores deleteSource ^
