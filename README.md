@@ -198,7 +198,6 @@ For information about the compiler environment see the wiki, there you also have
             - openexr (git)
             - xpm-nox (mingw-w64)
         - Optional GIMP language plugins
-            - python (3.11.9)
             - lua (luajit, git)
             - vala (0.56.17)
     - haisrt tools (git)
