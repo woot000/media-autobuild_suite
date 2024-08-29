@@ -77,7 +77,6 @@ while true; do
     --xvc=* ) xvc=${1#*=} && shift ;;
     --vlc=* ) vlc=${1#*=} && shift ;;
     --gimp=* ) gimp=${1#*=} && shift ;;
-    --gimpextra=* ) gimpextra=${1#*=} && shift ;;
     --exitearly=* ) exitearly=${1#*=} && shift ;;
     # --autouploadlogs=* ) autouploadlogs=${1#*=} && shift ;;
     -- ) shift && break ;;
@@ -1884,8 +1883,6 @@ build_libheif() {
     [[ $heifexec != n ]] && _check+=(bin-global/heif-{convert,enc,info,thumbnailer}.exe)
     if do_vcs "$SOURCE_REPO_LIBHEIF"; then
         do_uninstall {include,lib/cmake}/libheif "${_check[@]}"
-        do_patch "https://patch-diff.githubusercontent.com/raw/strukturag/libheif/pull/1261.patch" am
-        do_patch "https://patch-diff.githubusercontent.com/raw/strukturag/libheif/pull/1263.patch" am
         extracommands=(-DWITH_{EXAMPLES,GDK_PIXBUF}=OFF)
         [[ $heifexec != n ]] && extracommands=(-DWITH_EXAMPLES=ON)
         { [[ $libheif = y && $1 != gimp ]] || gimp_enabled jpeg2000; } && 
@@ -3168,6 +3165,10 @@ if [[ $gimp = y ]]; then
     local _orig_manpath="${MANPATH}"
     local _orig_pkg_config_path="${PKG_CONFIG_PATH}"
     local _orig_path="${PATH}"
+    local _py_ext=x86_64
+    [[ $msysEnv == *32 ]] && _py_ext=i686
+    [[ $msysEnv == CLANG* ]] && _py_ext+=_clang
+    [[ $msysEnv == UCRT64 ]] && _py_ext+=_ucrt
 
     # create folder for GIMP and its shared libraries
     local _gimp_dir="$LOCALDESTDIR/gimp"
@@ -3204,13 +3205,16 @@ if [[ $gimp = y ]]; then
 
     do_cmakegimpdir() {
         create_build_dir
+        get_custom_flags userflags
         extra_script pre cmake
         # shellcheck disable=SC2086
-        log "cmake" cmake .. -G Ninja -DBUILD_SHARED_LIBS=off \
+        ( [[ -n $userflags ]] && export "${userflags[@]}";
+            log "cmake" cmake .. -G Ninja -DBUILD_SHARED_LIBS=off \
             -DCMAKE_TOOLCHAIN_FILE="$_gimp_dir/../etc/toolchain.cmake" \
             -DCMAKE_INSTALL_PREFIX="$_gimp_dir" -DUNIX=on \
-            -DCMAKE_BUILD_TYPE=Release "$@"
+            -DCMAKE_BUILD_TYPE=Release "$@" )
         extra_script post cmake
+        unset userflags
     }
 
     do_cmakeinstallgimpdir() {
@@ -3221,13 +3225,16 @@ if [[ $gimp = y ]]; then
 
     do_cmakeshared() {
         create_build_dir
+        get_custom_flags userflags
         extra_script pre cmake
         # shellcheck disable=SC2086
-        log "cmake" cmake .. -G Ninja -DBUILD_SHARED_LIBS=on \
+        ( [[ -n $userflags ]] && export "${userflags[@]}";
+            log "cmake" cmake .. -G Ninja -DBUILD_SHARED_LIBS=on \
             -DCMAKE_TOOLCHAIN_FILE="$_gimp_dir/../etc/toolchain.cmake" \
             -DCMAKE_INSTALL_PREFIX="$_gimp_dir" -DUNIX=on \
-            -DCMAKE_BUILD_TYPE=Release "$@"
+            -DCMAKE_BUILD_TYPE=Release "$@" )
         extra_script post cmake
+        unset userflags
     }
 
     do_cmakeinstallshared() {
@@ -3238,12 +3245,16 @@ if [[ $gimp = y ]]; then
 
     do_mesonshared() {
         create_build_dir
+        get_custom_flags userflags
         extra_script pre meson
         # shellcheck disable=SC2086
-        PKG_CONFIG="$_gimp_dir/../bin/ab-pkg-config-static.bat" CC=${CC/ccache /}.bat CXX=${CXX/ccache /}.bat \
+        ( [[ -n $userflags ]] && export "${userflags[@]}";
+            PKG_CONFIG="$_gimp_dir/../bin/ab-pkg-config-static.bat" \
+            CC=${CC/ccache /}.bat CXX=${CXX/ccache /}.bat \
             log "meson" meson setup .. --default-library=shared --buildtype=release \
-            --prefix="${_gimp_dir}" --backend=ninja "$@"
+            --prefix="${_gimp_dir}" --backend=ninja "$@" )
         extra_script post meson
+        unset userflags
     }
 
     do_mesoninstallshared() {
@@ -3254,7 +3265,7 @@ if [[ $gimp = y ]]; then
 
     export PYTHONPATH="${_gimp_dir}/lib/python${cpython_major_ver}/site-packages:${MINGW_PREFIX}/lib/python${cpython_major_ver}/site-packages"
     _check=(bin/python{{,3}{,w},${cpython_major_ver}}.exe bin/libpython3{,${cpython_major_ver: +1}}.dll python-${cpython_major_ver}{,-embed}.pc
-        lib/python${cpython_major_ver}/lib-dynload/math.cp${cpython_major_ver//.}-mingw_${MSYSTEM_CARCH}$([[ $CC = *clang* ]] && echo _clang).pyd)
+        lib/python${cpython_major_ver}/lib-dynload/math.cp${cpython_major_ver//.}-mingw_${_py_ext}.pyd)
     if do_vcs "$SOURCE_REPO_CPYTHON"; then
         do_uninstall all {include,lib}/python${cpython_major_ver} "${_check[@]}"
         sed -i "s;-municode -static;-municode -Wno-incompatible-pointer-types -static;" Makefile.pre.in
@@ -3299,12 +3310,13 @@ if [[ $gimp = y ]]; then
     do_pacman_install pcre2
     _check=("${_glib_check[@]}" gobject-introspection{,-no-export}-1.0.pc bin/g-ir-{compiler,generate,inspect}.exe
         bin/g-ir-scanner bin/libgirepository-1.0-1.dll gobject-introspection-1.0/giversion.h
-        lib/gobject-introspection/giscanner/_giscanner.cp${cpython_major_ver//.}-mingw_${MSYSTEM_CARCH}$([[ $CC = *clang* ]] && echo _clang).pyd)
+        lib/gobject-introspection/giscanner/_giscanner.cp${cpython_major_ver//.}-mingw_${_py_ext}.pyd)
     if do_vcs "$SOURCE_REPO_GOBJECT_INTROSPECTION"; then
         do_uninstall all {include,share}/gobject-introspection-1.0 \
             lib/gobject-introspection share/gir-1.0/gir-1.2.rnc \
             "${_check[@]}" "${_glib_uninstall[@]}" "${_glib_gir_check[@]}"
         do_pacman_install python-packaging
+        log -q "git.submodule" git submodule update --init --recursive
         do_patch "https://gitlab.gnome.org/GNOME/gobject-introspection/-/merge_requests/458.patch" am
         # g-ir-scanner expects the PKG_CONFIG var to be a path with no arguments
         grep_and_sed environ "giscanner/pkgconfig.py" \
@@ -3438,6 +3450,7 @@ if [[ $gimp = y ]]; then
         do_uninstall "${_check[@]}" lib/python${cpython_major_ver}/site-packages/{gi,pygtkcompat,PyGObject*info}
         do_patch "https://gitlab.gnome.org/GNOME/pygobject/-/merge_requests/211.patch"
         sed -e "s;win;mingw;" -e "s;\"girepository-1.0-1.dll\";\"libgirepository-1.0-1.dll\";" -i gi/__init__.py
+        sed -e "s;_GI_TEST_EXTERN;GI_TEST_EXTERN;" -i tests/gimarshallingtestsextra.h -i tests/regressextra.h
         do_mesoninstallshared
         log "python compileall" ${MINGW_PREFIX}/bin/python -m compileall \
             -o 0 -o 1 -o 2 "${_gimp_dir}/lib/python${cpython_major_ver}/site-packages/gi"*
@@ -3507,7 +3520,8 @@ if [[ $gimp = y ]]; then
     if gimp_enabled wmf && do_vcs "$SOURCE_REPO_LIBWMF"; then
         do_uninstall {include,share}/libwmf "${_check[@]}"
         do_autoreconf
-        do_separate_confmakeinstall --with-libxml2 --without-x
+        LDFLAGS+=" $(xml2-config --libs) -llzma -lz" \
+            do_separate_confmakeinstall --with-libxml2 --without-x
         do_checkIfExist
     fi
 
@@ -3789,7 +3803,6 @@ if [[ $gimp = y ]]; then
         gegl{,-sc}-0.4.pc lib/gegl-0.4/gegl-{{common{,-cxx,-gpl3},generated},core}.dll)
     if do_vcs "$SOURCE_REPO_GEGL"; then
         do_uninstall {include,lib,share}/gegl-0.4 "${_check[@]}"
-        gimp_disabled python && gegl_disable pygobject
         local _extra_ldflags=()
         if gegl_enabled umfpack; then
             _extra_ldflags+=("$($PKG_CONFIG --libs --static umfpack)")
@@ -3835,8 +3848,8 @@ if [[ $gimp = y ]]; then
             do_autoreconf
             create_build_dir
             CFLAGS+=" -DOPJ_STATIC -Wno-int-conversion -Wno-incompatible-pointer-types" config_path=.. \
-                do_configure --enable-{fontconfig,freetype,gtk} --with-jbig2dec \
-                --disable-{dbus,contrib,cups} --without-x \
+                do_configure --enable-{fontconfig,freetype} --with-jbig2dec \
+                --disable-{contrib,cups,dbus,gtk} --without-x \
                 --with-{drivers=ALL,lib{iconv=gnu,idn},system-libtiff} \
                 "${extracommands[@]}" \
                 LIBS="$($PKG_CONFIG --libs --static Libidn libtiff-4)"
@@ -3852,10 +3865,10 @@ if [[ $gimp = y ]]; then
         unset _ghostscript_{hash,ver}
     fi
 
-    do_pacman_install discount
     _check=(bin/exchndl.dll libexchndl.dll.a exchndl.h)
-    if [[ $gimpextra =~ (y|drmingw) ]] && do_vcs "$SOURCE_REPO_DRMINGW"; then
+    if do_vcs "$SOURCE_REPO_DRMINGW"; then
         do_uninstall bin/{drmingw.exe,mgwhelp.dll} libmgwhelp.dll.a "${_check[@]}"
+        do_pacman_install discount
         log -q "git.submodule" git submodule update --init --recursive
         do_patch "https://raw.githubusercontent.com/msys2/MINGW-packages/master/mingw-w64-drmingw/0002-drmingw-allow-posix-threads.patch"
         # use system zlib
@@ -3866,14 +3879,14 @@ if [[ $gimp = y ]]; then
         do_checkIfExist
     fi
 
-    _check=(share/icons/hicolor/index.theme)
+    _check=(default-icon-theme.pc share/icons/hicolor/index.theme)
     if files_exist "${_check[@]}"; then
-        do_print_status "hicolor-icon-theme-0.17" "$green" "Up-to-date"
-    elif do_wget -h 317484352271d18cbbcfac3868eab798d67fff1b8402e740baa6ff41d588a9d8 \
-        "http://icon-theme.freedesktop.org/releases/hicolor-icon-theme-0.17.tar.xz"; then
+        do_print_status "hicolor-icon-theme-0.18" "$green" "Up-to-date"
+    elif do_wget -h db0e50a80aa3bf64bb45cbca5cf9f75efd9348cf2ac690b907435238c3cf81d7 \
+        "http://icon-theme.freedesktop.org/releases/hicolor-icon-theme-0.18.tar.xz"; then
         do_uninstall "${_check[@]}" share/icons/hicolor
-        do_autoreconf
-        do_separate_confmakeinstall
+        do_mesoninstall
+        cp ${_gimp_dir}/{share,lib}/pkgconfig/default-icon-theme.pc
         do_checkIfExist
     fi
 
@@ -3907,7 +3920,6 @@ if [[ $gimp = y ]]; then
     gimp_enabled fits && do_pacman_install cfitsio
     gimp_enabled ilbm && do_pacman_install libilbm
     gimp_enabled xpm && do_pacman_install xpm-nox
-    gimp_disabled python && gimp_enable python
 
     _deps=(../lib/lib{heif,jxl,OpenEXR-3_3,openjp2,tiff,webp}.a
         lib{gs,mng,mypaint,poppler{-glib},vala-${_vala_ver:0:4},wmf}.a
@@ -3940,8 +3952,6 @@ if [[ $gimp = y ]]; then
         unset _extra_ldflags
     fi
 
-    [[ $gimpextra =~ (n|drmingw) ]] && rm -rf ${_gimp_dir}/share/locale/ && mkdir ${_gimp_dir}/share/locale/
-
     export PYTHONPATH=
     export LOCALDESTDIR="${_orig_localdestdir}"
     export C_INCLUDE_PATH="${_orig_c_include_path}"
@@ -3952,7 +3962,7 @@ if [[ $gimp = y ]]; then
     export PKG_CONFIG_PATH="${_orig_pkg_config_path}"
     export PATH="${_orig_path}"
 
-    unset _orig_{{aclocal,c{,plus}_include,pkg_config}_path,{,info,man}path,localdestdir} _gimp_dir _vala_ver
+    unset _orig_{{aclocal,c{,plus}_include,pkg_config}_path,{,info,man}path,localdestdir} _gimp_dir _vala_ver _py_ext
     unset GI_TYPELIB_PATH GI_SCANNER_DISABLE_CACHE GIO_EXTRA_MODULES XDG_DATA_DIRS
 
     # shellcheck source=media-suite_helper.sh

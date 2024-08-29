@@ -153,7 +153,7 @@ For information about the compiler environment see the wiki, there you also have
             - glib-networking (git)
             - gtk3 (git tag)
             - harfbuzz (git)
-            - hicolor icon theme (0.17)
+            - hicolor icon theme (0.18)
             - iso-codes (4.16.0)
             - json-glib (git)
             - lcms2 (git)
