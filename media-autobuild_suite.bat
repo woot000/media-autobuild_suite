@@ -171,7 +171,7 @@ set iniOptions=arch license2 vpx2 x2643 x2652 other265 flac fdkaac mediainfo ^
 soxB ffmpegB2 ffmpegUpdate ffmpegChoice mp4box rtmpdump mplayer2 mpv cores deleteSource ^
 strip pack logging bmx standalone updateSuite aom faac exhale ffmbc curl cyanrip2 ^
 rav1e ripgrep dav1d libavif libheif openexr vvc uvg266 jq dssim avs2 dovitool hdr10plustool ^
-timeStamp noMintty ccache svthevc svtav1 svtvp9 xvc jo vlc CC jpegxl vvenc vvdec ffmpegPath gimp gimpextra
+timeStamp noMintty ccache svthevc svtav1 svtvp9 xvc jo vlc CC jpegxl vvenc vvdec ffmpegPath gimp
 @rem re-add autouploadlogs if we find some way to upload to github directly instead
 
 set deleteIni=0
@@ -1192,31 +1192,6 @@ if %buildgimp%==2 set "gimp=n"
 if %buildgimp% GTR 2 GOTO gimp
 if %deleteINI%==1 echo.gimp=^%buildgimp%>>%ini%
 
-:gimpextra
-if [0]==[%gimpextraINI%] (
-    echo -------------------------------------------------------------------------------
-    echo -------------------------------------------------------------------------------
-    echo.
-    echo. Build GIMP extras:
-    echo.
-    echo. 1 = All [Recommended]
-    echo. 2 = None
-    echo. 3 = Dr. MinGW only (Adds crash log support^)
-    echo. 4 = ISO code locales only (Adds additional translations, requires ~130MB^)
-    echo.
-    echo -------------------------------------------------------------------------------
-    echo -------------------------------------------------------------------------------
-    set /P buildgimpextra="Build GIMP: "
-) else set buildgimpextra=%gimpextraINI%
-
-if "%buildgimpextra%"=="" GOTO gimpextra
-if %buildgimpextra%==1 set "gimpexta=y"
-if %buildgimpextra%==2 set "gimpextra=n"
-if %buildgimpextra%==3 set "gimpextra=drmingw"
-if %buildgimpextra%==4 set "gimpextra=iso"
-if %buildgimpextra% GTR 4 GOTO gimpextra
-if %deleteINI%==1 echo.gimpextra=^%buildgimpextra%>>%ini%
-
 :bmx
 if [0]==[%bmxINI%] (
     echo -------------------------------------------------------------------------------
@@ -2014,7 +1989,7 @@ set compileArgs=--cpuCount=%cpuCount% --build32=%build32% --build64=%build64% ^
 --avs2=%avs2% --dovitool=%dovitool% --hdr10plustool=%hdr10plustool% --timeStamp=%timeStamp% ^
 --noMintty=%noMintty% --ccache=%ccache% --svthevc=%svthevc% --svtav1=%svtav1% --svtvp9=%svtvp9% ^
 --xvc=%xvc% --vlc=%vlc% --libavif=%libavif% --libheif=%libheif% --openexr=%openexr% --jpegxl=%jpegxl% ^
---gimp=%gimp% --gimpextra=%gimpextra% --ffmpegPath=%ffmpegPath% --exitearly=%MABS_EXIT_EARLY%
+--gimp=%gimp% --ffmpegPath=%ffmpegPath% --exitearly=%MABS_EXIT_EARLY%
     @REM --autouploadlogs=%autouploadlogs%
     set "noMintty=%noMintty%"
     if %build64%==yes (
