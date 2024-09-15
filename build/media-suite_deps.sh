@@ -1,7 +1,7 @@
 #!/bin/bash
 
 cpython_major_ver=3.11
-cpython_minor_ver=.9
+cpython_minor_ver=.10
 
 # Dependency References
 SOURCE_REPO_AMF=https://github.com/GPUOpen-LibrariesAndSDKs/AMF.git

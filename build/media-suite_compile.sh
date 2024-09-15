@@ -3272,15 +3272,14 @@ if [[ $gimp = y ]]; then
         lib/python${cpython_major_ver}/lib-dynload/math.cp${cpython_major_ver//.}-mingw_${_py_ext}.pyd)
     if do_vcs "$SOURCE_REPO_CPYTHON"; then
         do_uninstall all {include,lib}/python${cpython_major_ver} "${_check[@]}"
-        sed -i "s;-municode -static;-municode -Wno-incompatible-pointer-types -static;" Makefile.pre.in
-        local _extra_ldflags=("-Wno-incompatible-pointer-types")
+        local _extra_ldflags=()
         [[ $bits = 32bit ]] && _extra_ldflags+=("-Wl,--large-address-aware")
         do_autoreconf
         create_build_dir
-        CFLAGS="${CFLAGS/O2/O3} -Wno-incompatible-pointer-types" LDFLAGS="${LDFLAGS/O2/O3} ${_extra_ldflags}" \
+        CFLAGS="${CFLAGS/O2/O3}" LDFLAGS="${LDFLAGS/O2/O3} ${_extra_ldflags}" \
             config_path=.. do_configure --enable-{optimizations,shared} \
             --with-system-{expat,libmpdec} --without-ensurepip
-        CFLAGS="${CFLAGS/O2/O3} -Wno-incompatible-pointer-types" LDFLAGS="${LDFLAGS/O2/O3} ${_extra_ldflags}" \
+        CFLAGS="${CFLAGS/O2/O3}" LDFLAGS="${LDFLAGS/O2/O3} ${_extra_ldflags}" \
             do_make
         MSYS=winsymlinks:lnk do_makeinstall # ln -s fails if not set
         cp -rf "../build-${bits}/${_gimp_dir}/lib/python${cpython_major_ver}/lib-dynload" \
@@ -3333,6 +3332,7 @@ if [[ $gimp = y ]]; then
     if do_vcs "$SOURCE_REPO_GLIB"; then
         do_uninstall "${_check[@]}"
         do_pacman_install python-packaging
+        log -q "git.submodule" git submodule update --init --recursive
         do_patch "https://raw.githubusercontent.com/msys2/MINGW-packages/master/mingw-w64-glib2/0001-Update-g_fopen-g_open-and-g_creat-to-open-with-FILE_.patch" am
         sed -i "/\['-mms-bitfields'\]/,+2d" meson.build
         create_build_dir
@@ -3907,8 +3907,8 @@ if [[ $gimp = y ]]; then
     fi
     unset _adwaita_{hash,ver}
 
-    local _iso_codes_ver=4.16.0
-    local _iso_codes_hash=7c990fc39a05975bedb0175e3ff09fc383048815f68b462abbf055a8032e66cc
+    local _iso_codes_ver=4.17.0
+    local _iso_codes_hash=dd5ca13db77ec6dd1cc25f5c0184290a870ec1fed245d8e39a04ff34f59076c3
     _check=(iso-codes.pc share/xml/iso-codes/iso_639.xml)
     if do_pkgConfig "iso-codes = ${_iso_codes_ver}" && do_wget -h ${_iso_codes_hash} \
         "https://salsa.debian.org/iso-codes-team/iso-codes/-/archive/v${_iso_codes_ver}/iso-codes-v${_iso_codes_ver}.tar.gz"; then
