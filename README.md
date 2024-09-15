@@ -166,6 +166,7 @@ For information about the compiler environment see the wiki, there you also have
             - pango (git)
             - poppler (git)
             - poppler data (0.4.12)
+            - python (3.11.10)
             - shared-mime-info (git)
             - vala (valac, 0.56.17)
         - Optional gegl features
