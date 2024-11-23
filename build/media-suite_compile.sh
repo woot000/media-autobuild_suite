@@ -21,8 +21,7 @@ printf '#!/bin/bash\nbash %s %s\n' "$LOCALBUILDDIR/media-suite_compile.sh" "$*" 
 while true; do
     case $1 in
     --cpuCount=* ) cpuCount=${1#*=} && shift ;;
-    --build32=* ) build32=${1#*=} && shift ;;
-    --build64=* ) build64=${1#*=} && shift ;;
+    --msysEnv=* ) msysEnv=${1#*=} && shift ;;
     --mp4box=* ) mp4box=${1#*=} && shift ;;
     --rtmpdump=* ) rtmpdump=${1#*=} && shift ;;
     --vpx=* ) vpx=${1#*=} && shift ;;
@@ -101,7 +100,7 @@ do_simple_print -p "${orange}Warning: We will not accept any issues lacking any 
 
 buildProcess() {
 set_title
-do_simple_print -p '\n\t'"${orange}Starting $bits compilation of all tools$reset"
+do_simple_print -p '\n\t'"${orange}Starting $MSYSTEM compilation of all tools$reset"
 [[ -f $HOME/custom_build_options ]] &&
     echo "Imported custom build options (unsupported)" &&
     source "$HOME"/custom_build_options
@@ -167,7 +166,7 @@ $CC -E -P -include pthread.h - < /dev/null | grep -q MemoryBarrier ||
     grep_and_sed MemoryBarrier "$MINGW_PREFIX/include/pthread.h" 's/MemoryBarrier/__sync_synchronize/g'
 
 set_title "compiling global tools"
-do_simple_print -p '\n\t'"${orange}Starting $bits compilation of global tools${reset}"
+do_simple_print -p '\n\t'"${orange}Starting $MSYSTEM compilation of global tools${reset}"
 
 if [[ $bits = 32bit && $av1an != n ]]; then
     do_simple_print "${orange}Av1an cannot be compiled due to Vapoursynth being broken on 32-bit and will be disabled"'!'"${reset}"
@@ -466,7 +465,7 @@ if [[ $mediainfo = y || $bmx = y || $curl != n || $cyanrip = y ]]; then
         [[ $curl = openssl ]] && hide_libressl -R
         if [[ $curl != schannel ]]; then
             _notrequired=true
-            cd_safe "build-$bits"
+            cd_safe "build-$MSYSTEM"
             PATH=/usr/bin log ca-bundle make ca-bundle
             unset _notrequired
             [[ -f lib/ca-bundle.crt ]] &&
@@ -670,7 +669,7 @@ if [[ $exitearly = EE3 ]]; then
 fi
 
 set_title "compiling audio tools"
-do_simple_print -p '\n\t'"${orange}Starting $bits compilation of audio tools${reset}"
+do_simple_print -p '\n\t'"${orange}Starting $MSYSTEM compilation of audio tools${reset}"
 
 if [[ $ffmpeg != no || $sox = y ]]; then
     do_pacman_install wavpack
@@ -882,7 +881,7 @@ if [[ $ffmpeg != no ]] && enabled libcodec2; then
                 xargs -r sed -ri "s;((lsp|lpc)_to_(lpc|lsp));c2_\1;g"
         fi
         do_cmakeinstall -D{UNITTEST,INSTALL_EXAMPLES}=off \
-            -DCMAKE_INSTALL_BINDIR="$(pwd)/build-$bits/_bin"
+            -DCMAKE_INSTALL_BINDIR="$(pwd)/build-$MSYSTEM/_bin"
         do_checkIfExist
     fi
 fi
@@ -1059,7 +1058,7 @@ if [[ $exitearly = EE4 ]]; then
 fi
 
 set_title "compiling video tools"
-do_simple_print -p '\n\t'"${orange}Starting $bits compilation of video tools${reset}"
+do_simple_print -p '\n\t'"${orange}Starting $MSYSTEM compilation of video tools${reset}"
 
 _deps=(gnutls.pc)
 _check=(librtmp.{a,pc})
@@ -1201,14 +1200,14 @@ if { [[ $rav1e = y ]] || [[ $libavif = y ]] || enabled librav1e; } &&
         PKG_CONFIG="$LOCALDESTDIR/bin/ab-pkg-config-static.bat" \
             log "install-rav1e-c" cargo capi install \
             --release --jobs "$cpuCount" --prefix="$LOCALDESTDIR" \
-            --destdir="$PWD/install-$bits"
+            --destdir="$PWD/install-$MSYSTEM"
 
-        # do_install "install-$bits/bin/rav1e.dll" bin-video/
-        # do_install "install-$bits/lib/librav1e.dll.a" lib/
-        do_install "$(find "install-$bits/" -name "librav1e.a")" lib/
-        do_install "$(find "install-$bits/" -name "rav1e.pc")" lib/pkgconfig/
+        # do_install "install-$MSYSTEM/bin/rav1e.dll" bin-video/
+        # do_install "install-$MSYSTEM/lib/librav1e.dll.a" lib/
+        do_install "$(find "install-$MSYSTEM/" -name "librav1e.a")" lib/
+        do_install "$(find "install-$MSYSTEM/" -name "rav1e.pc")" lib/pkgconfig/
         sed -i 's/\\/\//g' "$LOCALDESTDIR/lib/pkgconfig/rav1e.pc" >/dev/null 2>&1
-        do_install "$(find "install-$bits/" -name "rav1e")"/*.h include/rav1e/
+        do_install "$(find "install-$MSYSTEM/" -name "rav1e")"/*.h include/rav1e/
     fi
 
     do_checkIfExist
@@ -1658,7 +1657,7 @@ if [[ $x264 != no ]] ||
                     --disable-{programs,devices,filters,encoders,muxers,debug,sdl2,doc} --enable-gpl
             fi
             do_makeinstall
-            files_exist "${_check[@]}" && touch "build_successful${bits}_light"
+            files_exist "${_check[@]}" && touch "build_successful${MSYSTEM}_light"
             unset_extra_script
 
             _check=("$LOCALDESTDIR"/opt/lightffmpeg/lib/pkgconfig/ffms2.pc bin-video/ffmsindex.exe)
@@ -1970,7 +1969,7 @@ if [[ $av1an != n ]]; then
         # move static ffmpeg to a reasonable location if ffmpeg is disabled
         [[ $av1an != shared ]] && [[ $ffmpeg = no ]] && [[ ! -f "$LOCALDESTDIR"/bin-video/ffmpeg.exe ]] &&
             mv -f "$LOCALDESTDIR"/{"$av1an_ffmpeg_prefix"/bin,bin-video}/ffmpeg.exe
-        files_exist "${_check[@]}" && touch ../"build_successful${bits}_av1an"
+        files_exist "${_check[@]}" && touch ../"build_successful${MSYSTEM}_av1an"
         unset av1an_ffmpeg_opts
     fi
 
@@ -2375,7 +2374,7 @@ if [[ $ffmpeg != no ]]; then
             ffmpeg_cflags=$(sed -r 's/ (-O[1-3]|-mtune=\S+)//g' <<< "$CFLAGS")
 
         # shared
-        if [[ $ffmpeg != static ]] && [[ ! -f build_successful${bits}_shared ]]; then
+        if [[ $ffmpeg != static ]] && [[ ! -f build_successful${MSYSTEM}_shared ]]; then
             do_print_progress "Compiling ${bold}shared${reset} FFmpeg"
             do_uninstall bin-video/ffmpegSHARED "${_uninstall[@]}"
             [[ -f config.mak ]] && log "distclean" make distclean
@@ -2388,7 +2387,7 @@ if [[ $ffmpeg != no ]]; then
             sed -ri "s/ ?--($sedflags)=(\S+[^\" ]|'[^']+')//g" config.h
             do_make && do_makeinstall
             cd_safe ..
-            files_exist "${_check[@]}" && touch "build_successful${bits}_shared"
+            files_exist "${_check[@]}" && touch "build_successful${MSYSTEM}_shared"
         fi
 
         # static
@@ -2466,14 +2465,14 @@ check_mplayer_updates() {
 
     if [[ $oldHead != "$newHead" || -f custom_updated ]]; then
         touch recently_updated
-        rm -f ./build_successful{32,64}bit{,_*}
-        if [[ $build32$build64$bits == yesyes64bit ]]; then
+        rm -f ./build_successful$MSYSTEM{,_*}
+        if [[ $msysEnv$MSYSTEM == ALLUCRT64 ]]; then
             new_updates="yes"
             new_updates_packages="$new_updates_packages [mplayer]"
         fi
         printf 'mplayer\n' >> "$LOCALBUILDDIR"/newchangelog
         do_print_status "┌ mplayer svn" "$orange" "Updates found"
-    elif [[ -f recently_updated && ! -f build_successful$bits ]]; then
+    elif [[ -f recently_updated && ! -f build_successful$MSYSTEM ]]; then
         do_print_status "┌ mplayer svn" "$orange" "Recently updated"
     elif ! files_exist "${_check[@]}"; then
         do_print_status "┌ mplayer svn" "$orange" "Files missing"
@@ -2810,7 +2809,7 @@ if [[ $cyanrip = y ]]; then
                 --enable-filter=hdcd \
                 "${cyan_ffmpeg_opts[@]}"
             do_makeinstall
-            files_exist "${_check[@]}" && touch ../"build_successful${bits}_cyan"
+            files_exist "${_check[@]}" && touch ../"build_successful${MSYSTEM}_cyan"
         fi
         unset cyan_ffmpeg_opts
         PKG_CONFIG_PATH=$LOCALDESTDIR/opt/cyanffmpeg/lib/pkgconfig:$PKG_CONFIG_PATH
@@ -3105,19 +3104,30 @@ if [[ $ffmbc = y ]] && do_vcs "https://github.com/bcoudurier/FFmbc.git#branch=ff
     unset _notrequired
 fi
 
-do_simple_print -p "${orange}Finished $bits compilation of all tools${reset}"
+do_simple_print -p "${orange}Finished $MSYSTEM compilation of all tools${reset}"
 }
 
 run_builds() {
     new_updates=no
     new_updates_packages=""
-    if [[ $build32 = yes ]]; then
-        source /local32/etc/profile2.local
+    if [[ $msysEnv == ALL || $msysEnv == MINGW || $msysEnv == MINGW32 ]]; then
+        source /local32-mingw/etc/profile2.local
         buildProcess
     fi
-
-    if [[ $build64 = yes ]]; then
-        source /local64/etc/profile2.local
+    if [[ $msysEnv == ALL || $msysEnv == MINGW || $msysEnv == MINGW64 ]]; then
+        source /local64-mingw/etc/profile2.local
+        buildProcess
+    fi
+    if [[ $msysEnv == ALL || $msysEnv == CLANG || $msysEnv == CLANG32 ]]; then
+        source /local32-clang/etc/profile2.local
+        buildProcess
+    fi
+    if [[ $msysEnv == ALL || $msysEnv == CLANG || $msysEnv == CLANG64 ]]; then
+        source /local64-clang/etc/profile2.local
+        buildProcess
+    fi
+    if [[ $msysEnv == ALL || $msysEnv == UCRT64 ]]; then
+        source /local64-ucrt/etc/profile2.local
         buildProcess
     fi
 }
