@@ -103,7 +103,7 @@ if not exist %build% mkdir %build%
 set msyspackages=autoconf-archive autoconf-wrapper autogen automake-wrapper base dos2unix ^
 filesystem git libtool make msys2-runtime patch pacutils p7zip subversion unzip winpty
 
-set mingwpackages=ccache cmake dlfcn gettext-tools meson nasm ninja pkgconf
+set basepackages=ccache cmake dlfcn gettext-tools meson nasm ninja pkgconf
 
 :: built-ins
 set ffmpeg_options_builtin=--disable-autodetect amf bzlib cuda cuvid d3d12va d3d11va dxva2 ^
@@ -147,7 +147,7 @@ set iniOptions=arch license2 vpx2 x2643 x2652 other265 flac fdkaac mediainfo ^
 soxB ffmpegB2 ffmpegUpdate ffmpegChoice ffmpegKeepLegacyOpts mp4box rtmpdump mplayer2 mpv ^
 cores deleteSource strip pack logging bmx standalone updateSuite av1an aom faac exhale ffmbc ^
 curl cyanrip2 rav1e ripgrep dav1d libavif libheif vvc uvg266 jq dssim gifski avs2 dovitool ^
-hdr10plustool timeStamp noMintty ccache svthevc svtav1 svtvp9 xvc jo vlc CC jpegxl vvenc vvdec ^
+hdr10plustool timeStamp noMintty ccache svthevc svtav1 svtvp9 xvc jo vlc jpegxl vvenc vvdec ^
 zlib ffmpegPath pkgUpdateTime
 @rem re-add autouploadlogs if we find some way to upload to github directly instead
 
@@ -185,21 +185,24 @@ if [0]==[%archINI%] (
     echo -------------------------------------------------------------------------------
     echo.
     echo. Select the build target system:
-    echo. 1 = both [32 bit and 64 bit]
-    echo. 2 = 32 bit build system
-    echo. 3 = 64 bit build system
+    echo. 1 = MINGW32                    4 = UCRT64
+    echo. 2 = MINGW64 [recommended]      5 = MINGW32 and MINGW64
+    echo. 3 = CLANG64                    6 = All environments listed
     echo.
     echo -------------------------------------------------------------------------------
     echo -------------------------------------------------------------------------------
-    set /P buildEnv="Build System: "
-) else set buildEnv=%archINI%
+    set /P selectSystem="Build System: "
+) else set selectSystem=%archINI%
 
-if "%buildEnv%"=="" GOTO selectSystem
-if %buildEnv%==1 set "build32=yes" && set "build64=yes"
-if %buildEnv%==2 set "build32=yes" && set "build64=no"
-if %buildEnv%==3 set "build32=no" && set "build64=yes"
-if %buildEnv% GTR 3 GOTO selectSystem
-if %deleteINI%==1 echo.arch=^%buildEnv%>>%ini%
+if "%selectSystem%"=="" GOTO selectSystem
+if %selectSystem%==1 set "msysEnv=MINGW32"
+if %selectSystem%==2 set "msysEnv=MINGW64"
+if %selectSystem%==3 set "msysEnv=CLANG64"
+if %selectSystem%==4 set "msysEnv=UCRT64"
+if %selectSystem%==5 set "msysEnv=MINGW"
+if %selectSystem%==6 set "msysEnv=ALL"
+if %selectSystem% GTR 6 GOTO selectSystem
+if %deleteINI%==1 echo.arch=^%selectSystem%>>%ini%
 
 :ffmpeglicense
 if [0]==[%license2INI%] (
@@ -1427,28 +1430,6 @@ if %buildzlib%==6 set "zlib=n"
 if %buildzlib% GTR 6 GOTO zlib
 if %deleteINI%==1 echo.zlib=^%buildzlib%>>%ini%
 
-:CC
-if [0]==[%CCINI%] (
-    echo -------------------------------------------------------------------------------
-    echo -------------------------------------------------------------------------------
-    echo.
-    echo. Use clang instead of gcc (C compiler^)?
-    echo. Experimental and possibly broken due to gcc assumptions
-    echo. 1 = Yes
-    echo. 2 = No [Recommended]
-    echo.
-    echo.
-    echo -------------------------------------------------------------------------------
-    echo -------------------------------------------------------------------------------
-    set /P buildCC="Build using clang: "
-) else set buildCC=%CCINI%
-
-if "%buildCC%"=="" GOTO CC
-if %buildCC%==1 set "CC=clang"
-if %buildCC%==2 set "CC=gcc"
-if %buildCC% GTR 2 GOTO CC
-if %deleteINI%==1 echo.CC=^%buildCC%>>%ini%
-
 :numCores
 if %NUMBER_OF_PROCESSORS% EQU 1 ( set coreHalf=1 ) else set /a coreHalf=%NUMBER_OF_PROCESSORS%/2
 if [0]==[%coresINI%] (
@@ -1700,19 +1681,6 @@ if %ffmpegKeepLegacyOptsINI%==0 set ffmpegKeepLegacyOpts=n
 if %ffmpegKeepLegacyOptsINI%==1 set ffmpegKeepLegacyOpts=y
 if %deleteINI%==1 echo.ffmpegKeepLegacyOpts=^%ffmpegKeepLegacyOptsINI%>>%ini%
 
-if %build32%==yes (
-    if %CC%==clang (
-        echo ----------------------------------------------------------------------
-        echo. As of December 18th 2024, msys2 no longer supports the
-        echo. CLANG32 environment. To continue running the suite, either
-        echo. switch to 64-bit (arch=3^), or
-        echo. switch to using gcc as the compiler (CC=2^).
-        echo. This can be done through editing build\media-autobuild_suite.ini.
-        pause
-        exit
-    )
-)
-
 rem ------------------------------------------------------------------
 rem download and install basic msys2 system:
 rem ------------------------------------------------------------------
@@ -1794,11 +1762,12 @@ if not exist %instdir%\mintty.lnk (
     (
         echo.Set Shell = CreateObject("WScript.Shell"^)
         echo.Set link = Shell.CreateShortcut("%instdir%\mintty.lnk"^)
-        if %CC%==clang (
-            echo.link.Arguments = "-full-path -clang64 -where .."
-        ) else (
-            echo.link.Arguments = "-full-path -mingw -where .."
-        )
+        if %msysEnv%==MINGW32 echo.link.Arguments = "-full-path -mingw32 -where .."
+        if %msysEnv%==MINGW64 echo.link.Arguments = "-full-path -mingw64 -where .."
+        if %msysEnv%==CLANG64 echo.link.Arguments = "-full-path -clang64 -where .."
+        if %msysEnv%==UCRT64 echo.link.Arguments = "-full-path -ucrt64 -where .."
+        if %msysEnv%==MINGW echo.link.Arguments = "-full-path -mingw -where .."
+        if %msysEnv%==ALL echo.link.Arguments = "-full-path -mingw64 -where .."
         echo.link.Description = "msys2 shell console"
         echo.link.TargetPath = "%instdir%\msys64\msys2_shell.cmd"
         echo.link.WindowStyle = 1
@@ -1811,8 +1780,17 @@ if not exist %instdir%\mintty.lnk (
 )
 
 rem createFolders
-if %build32%==yes call :createBaseFolders local32
-if %build64%==yes call :createBaseFolders local64
+if %msysEnv%==MINGW32 call :createBaseFolders 32 , mingw
+if %msysEnv%==MINGW64 call :createBaseFolders 64 , mingw
+if %msysEnv%==CLANG64 call :createBaseFolders 64 , clang
+if %msysEnv%==UCRT64 call :createBaseFolders 64 , ucrt
+if %msysEnv%==MINGW ( call :createBaseFolders 32 , mingw && call :createBaseFolders 64 , mingw )
+if %msysEnv%==ALL (
+    call :createBaseFolders 32 , mingw
+    call :createBaseFolders 64 , mingw
+    call :createBaseFolders 64 , clang
+    call :createBaseFolders 64 , ucrt
+)
 
 rem checkFstab
 set "removefstab=no"
@@ -1820,9 +1798,21 @@ set "fstab=%instdir%\msys64\etc\fstab"
 if exist %fstab%. (
     findstr trunk %fstab% >nul 2>&1 || set "removefstab=yes"
     for /f "tokens=1 delims= " %%a in ('findstr trunk %fstab%') do if not [%%a]==[%instdir%\] set "removefstab=yes"
-    findstr local32 %fstab% >nul 2>&1 && ( if [%build32%]==[no] set "removefstab=yes" ) || if [%build32%]==[yes] set "removefstab=yes"
-    findstr local64 %fstab% >nul 2>&1 && ( if [%build64%]==[no] set "removefstab=yes" ) || if [%build64%]==[yes] set "removefstab=yes"
     findstr clang32 %fstab% >nul 2>&1 && set "removefstab=yes"
+    if %msysEnv%==MINGW32 ( findstr local32-mingw %fstab% >nul 2>&1 || set "removefstab=yes" )
+    if %msysEnv%==MINGW64 ( findstr local64-mingw %fstab% >nul 2>&1 || set "removefstab=yes" )
+    if %msysEnv%==CLANG64 ( findstr local64-clang %fstab% >nul 2>&1 || set "removefstab=yes" )
+    if %msysEnv%==UCRT64 ( findstr local64-ucrt %fstab% >nul 2>&1 || set "removefstab=yes" )
+    if %msysEnv%==MINGW (
+        findstr local32-mingw %fstab% >nul 2>&1 || set "removefstab=yes"
+        findstr local64-mingw %fstab% >nul 2>&1 || set "removefstab=yes"
+    )
+    if %msysEnv%==ALL (
+        findstr local32-mingw %fstab% >nul 2>&1 || set "removefstab=yes"
+        findstr local64-mingw %fstab% >nul 2>&1 || set "removefstab=yes"
+        findstr local64-clang %fstab% >nul 2>&1 || set "removefstab=yes"
+        findstr local64-ucrt %fstab% >nul 2>&1 || set "removefstab=yes"
+    )
 ) else set removefstab=yes
 
 if not [%removefstab%]==[no] (
@@ -1840,8 +1830,21 @@ if not [%removefstab%]==[no] (
         echo.%instdir%\msys64\mingw32\ /mingw32 ntfs binary,posix=0,noacl,user 0 0
         echo.%instdir%\msys64\mingw64\ /mingw64 ntfs binary,posix=0,noacl,user 0 0
         echo.%instdir%\msys64\clang64\ /clang64 ntfs binary,posix=0,noacl,user 0 0
-        if "%build32%"=="yes" echo.%instdir%\local32\ /local32 ntfs binary,posix=0,noacl,user 0 0
-        if "%build64%"=="yes" echo.%instdir%\local64\ /local64 ntfs binary,posix=0,noacl,user 0 0
+        echo.%instdir%\msys64\ucrt64\ /ucrt64 ntfs binary,posix=0,noacl,user 0 0
+        if %msysEnv%==MINGW32 echo.%instdir%\local32-mingw\ /local32-mingw ntfs binary,posix=0,noacl,user 0 0
+        if %msysEnv%==MINGW64 echo.%instdir%\local64-mingw\ /local64-mingw ntfs binary,posix=0,noacl,user 0 0
+        if %msysEnv%==CLANG64 echo.%instdir%\local64-clang\ /local64-clang ntfs binary,posix=0,noacl,user 0 0
+        if %msysEnv%==UCRT64 echo.%instdir%\local64-ucrt\ /local64-ucrt ntfs binary,posix=0,noacl,user 0 0
+        if %msysEnv%==MINGW (
+            echo.%instdir%\local32-mingw\ /local32-mingw ntfs binary,posix=0,noacl,user 0 0
+            echo.%instdir%\local64-mingw\ /local64-mingw ntfs binary,posix=0,noacl,user 0 0
+        )
+        if %msysEnv%==ALL (
+            echo.%instdir%\local32-mingw\ /local32-mingw ntfs binary,posix=0,noacl,user 0 0
+            echo.%instdir%\local64-mingw\ /local64-mingw ntfs binary,posix=0,noacl,user 0 0
+            echo.%instdir%\local64-clang\ /local64-clang ntfs binary,posix=0,noacl,user 0 0
+            echo.%instdir%\local64-ucrt\ /local64-ucrt ntfs binary,posix=0,noacl,user 0 0
+        )
     )>"%instdir%\msys64\etc\fstab."
 )
 
@@ -1902,16 +1905,23 @@ if not exist %instdir%\msys64\usr\bin\make.exe (
 for %%i in (%instdir%\msys64\usr\ssl\cert.pem) do if %%~zi==0 call :runBash cert.log update-ca-trust
 
 rem installmingw
-rem extra package for clang
-if %CC%==clang (
-    set "mingwpackages=%mingwpackages% clang gcc-compat lld"
-) else (
-    set "mingwpackages=%mingwpackages% binutils gcc"
-)
+set "mingwpackages=%basepackages% binutils gcc"
+set "clangpackages=%basepackages% gcc-compat lld"
+set "ucrtpackages=%mingwpackages%"
 if exist "%instdir%\msys64\etc\pac-mingw.pk" del "%instdir%\msys64\etc\pac-mingw.pk"
-for %%i in (%mingwpackages%) do echo.%%i>>%instdir%\msys64\etc\pac-mingw.pk
-if %build32%==yes call :getmingw 32
-if %build64%==yes call :getmingw 64
+if exist "%instdir%\msys64\etc\pac-clang.pk" del "%instdir%\msys64\etc\pac-clang.pk"
+if exist "%instdir%\msys64\etc\pac-ucrt.pk" del "%instdir%\msys64\etc\pac-ucrt.pk"
+if %msysEnv%==MINGW32 call :getmingw 32 , mingw
+if %msysEnv%==MINGW64 call :getmingw 64 , mingw
+if %msysEnv%==CLANG64 call :getmingw 64 , clang
+if %msysEnv%==UCRT64 call :getmingw 64 , ucrt
+if %msysEnv%==MINGW call :getmingw 32 , mingw && call :getmingw 64 , mingw
+if %msysEnv%==ALL (
+    call :getmingw 32 , mingw
+    call :getmingw 64 , mingw
+    call :getmingw 64 , clang
+    call :getmingw 64 , ucrt
+)
 if exist "%build%\mingw.sh" del %build%\mingw.sh
 
 rem updatebase
@@ -1947,8 +1957,17 @@ rem ------------------------------------------------------------------
 rem write config profiles:
 rem ------------------------------------------------------------------
 
-if %build32%==yes call :writeProfile 32
-if %build64%==yes call :writeProfile 64
+if %msysEnv%==MINGW32 call :writeProfile 32 , mingw
+if %msysEnv%==MINGW64 call :writeProfile 64 , mingw
+if %msysEnv%==CLANG64 call :writeProfile 64 , clang
+if %msysEnv%==UCRT64 call :writeProfile 64 , ucrt
+if %msysEnv%==MINGW call :writeProfile 32 , mingw && call :writeProfile 64 , mingw
+if %msysEnv%==ALL (
+    call :writeProfile 32 , mingw
+    call :writeProfile 64 , mingw
+    call :writeProfile 64 , clang
+    call :writeProfile 64 , ucrt
+)
 
 rem update
 if exist "%instdir%\build\updated.log" (
@@ -1957,7 +1976,7 @@ if exist "%instdir%\build\updated.log" (
     set needsupdate=yes
 )
 if defined needsupdate (
-    call :runBash update.log /build/media-suite_update.sh --build32=%build32% --build64=%build64% --CC="%CC%"
+    call :runBash update.log /build/media-suite_update.sh --msysEnv=%msysEnv%
     powershell -noprofile -command "[datetimeoffset]::now.tounixtimeseconds()" > %instdir%\build\updated.log
 )
 
@@ -1977,8 +1996,10 @@ if exist %instdir%\msys64\etc\profile.pacnew ^
     move /y %instdir%\msys64\etc\profile.pacnew %instdir%\msys64\etc\profile
 (
     echo.case "$MSYSTEM" in
-    echo.*32^) source /local32/etc/profile2.local ;;
-    echo.*64^) source /local64/etc/profile2.local ;;
+    echo.MINGW32^) source /local32-mingw/etc/profile2.local ;;
+    echo.MINGW64^) source /local64-mingw/etc/profile2.local ;;
+    echo.CLANG64^) source /local64-clang/etc/profile2.local ;;
+    echo.UCRT64^) source /local64-ucrt/etc/profile2.local ;;
     echo.esac
     echo.case $- in
     echo.*i*^) ;;
@@ -1995,7 +2016,7 @@ if exist %build%\compilation_failed del %build%\compilation_failed
 if exist %build%\fail_comp del %build%\compilation_failed
 
 endlocal & (
-set compileArgs=--cpuCount=%cpuCount% --build32=%build32% --build64=%build64% ^
+set compileArgs=--cpuCount=%cpuCount% --msysEnv=%msysEnv% ^
 --deleteSource=%deleteSource% --mp4box=%mp4box% --vpx=%vpx2% --x264=%x2643% --x265=%x2652% ^
 --other265=%other265% --flac=%flac% --fdkaac=%fdkaac% --mediainfo=%mediainfo% --sox=%sox% ^
 --ffmpeg=%ffmpeg% --ffmpegUpdate=%ffmpegUpdate% --ffmpegChoice=%ffmpegChoice% --ffmpegKeepLegacyOpts=%ffmpegKeepLegacyOpts% --mplayer=%mplayer% ^
@@ -2009,11 +2030,12 @@ set compileArgs=--cpuCount=%cpuCount% --build32=%build32% --build64=%build64% ^
 --ffmpegPath=%ffmpegPath% --exitearly=%MABS_EXIT_EARLY%
     @REM --autouploadlogs=%autouploadlogs%
     set "noMintty=%noMintty%"
-    if %build64%==yes (
-        if %CC%==clang ( set "MSYSTEM=CLANG64" ) else set "MSYSTEM=MINGW64"
-    ) else (
-        set "MSYSTEM=MINGW32"
-    )
+    if %msysEnv%==MINGW32 set "MSYSTEM=MINGW32"
+    if %msysEnv%==MINGW64 set "MSYSTEM=MINGW64"
+    if %msysEnv%==CLANG64 set "MSYSTEM=CLANG64"
+    if %msysEnv%==UCRT64 set "MSYSTEM=UCRT64"
+    if %msysEnv%==MINGW set "MSYSTEM=MINGW64"
+    if %msysEnv%==ALL set "MSYSTEM=MINGW64"
     set "MSYS2_PATH_TYPE=inherit"
     if %noMintty%==y set "PATH=%PATH%"
     set "build=%build%"
@@ -2034,44 +2056,44 @@ endlocal
 goto :EOF
 
 :createBaseFolders
-if not exist %instdir%\%1\share (
+if not exist %instdir%\local%1-%2\share (
     echo.-------------------------------------------------------------------------------
-    echo.creating %1-bit install folders
+    echo.creating %1-bit %2 install folders
     echo.-------------------------------------------------------------------------------
-    mkdir %instdir%\%1 2>NUL
-    mkdir %instdir%\%1\bin 2>NUL
-    mkdir %instdir%\%1\bin-audio 2>NUL
-    mkdir %instdir%\%1\bin-global 2>NUL
-    mkdir %instdir%\%1\bin-video 2>NUL
-    mkdir %instdir%\%1\etc 2>NUL
-    mkdir %instdir%\%1\include 2>NUL
-    mkdir %instdir%\%1\lib 2>NUL
-    mkdir %instdir%\%1\lib\pkgconfig 2>NUL
-    mkdir %instdir%\%1\share 2>NUL
+    mkdir %instdir%\local%1-%2 2>NUL
+    mkdir %instdir%\local%1-%2\bin 2>NUL
+    mkdir %instdir%\local%1-%2\bin-audio 2>NUL
+    mkdir %instdir%\local%1-%2\bin-global 2>NUL
+    mkdir %instdir%\local%1-%2\bin-video 2>NUL
+    mkdir %instdir%\local%1-%2\etc 2>NUL
+    mkdir %instdir%\local%1-%2\include 2>NUL
+    mkdir %instdir%\local%1-%2\lib 2>NUL
+    mkdir %instdir%\local%1-%2\lib\pkgconfig 2>NUL
+    mkdir %instdir%\local%1-%2\share 2>NUL
 )
 goto :EOF
 
 :writeProfile
 (
     echo.#!/usr/bin/bash
-    if %CC%==clang (
-        echo.MSYSTEM=CLANG%1
-    ) else (
+    if %2==mingw (
         echo.MSYSTEM=MINGW%1
-    )
+    ) else if %2==clang (
+        echo.MSYSTEM=CLANG%1
+    ) else echo.MSYSTEM=UCRT64
     echo.source /etc/msystem
     echo.
     echo.# package build directory
     echo.export LOCALBUILDDIR='/build'
     echo.# package installation prefix
-    echo.export LOCALDESTDIR='/local%1'
+    echo.export LOCALDESTDIR='/local%1-%2'
     echo.
     echo.bits='%1bit'
     echo.
     echo.export CONFIG_SITE=/etc/config.site
     echo.alias dir='ls -la --color=auto'
     echo.alias ls='ls --color=auto'
-    if %CC%==clang (
+    if %2==clang (
         echo.export CC="ccache clang"
         echo.export CXX="ccache clang++"
     ) else (
@@ -2131,8 +2153,8 @@ goto :EOF
     echo.export LANG PATH PS1 HOME GIT_GUI_LIB_DIR
     echo.stty susp undef
     echo.test -f "$LOCALDESTDIR/etc/custom_profile" ^&^& source "$LOCALDESTDIR/etc/custom_profile"
-)>%instdir%\local%1\etc\profile2.local
-%instdir%\msys64\usr\bin\dos2unix -q %instdir%\local%1\etc\profile2.local
+)>%instdir%\local%1-%2\etc\profile2.local
+%instdir%\msys64\usr\bin\dos2unix -q %instdir%\local%1-%2\etc\profile2.local
 goto :EOF
 
 :writeFFmpegOption
@@ -2191,42 +2213,49 @@ goto :EOF
 :getmingw
 setlocal
 set found=0
-if %CC%==clang (
-    set "compiler=%instdir%\msys64\clang%1\bin\clang.exe"
-) else set "compiler=%instdir%\msys64\mingw%1\bin\gcc.exe"
-if exist %compiler% set found=1
-if %found%==1 GOTO :EOF
-echo.-------------------------------------------------------------------------------
-echo.install %1 bit compiler
-echo.-------------------------------------------------------------------------------
-if %CC%==clang (
-    set prefix=mingw-w64-clang-x86_64-
-) else (
+if %2==mingw (
+    for %%i in (%mingwpackages%) do echo.%%i>>%instdir%\msys64\etc\pac-%2.pk
+    set "compiler=%instdir%\msys64\%~2%~1\bin\gcc.exe"
     if "%1"=="32" (
         set prefix=mingw-w64-i686-
     ) else set prefix=mingw-w64-x86_64-
 )
+if %2==clang (
+    for %%i in (%clangpackages%) do echo.%%i>>%instdir%\msys64\etc\pac-%2.pk
+    set "compiler=%instdir%\msys64\%~2%~1\bin\clang.exe"
+    set prefix=mingw-w64-clang-x86_64-
+)
+if %2==ucrt (
+    for %%i in (%ucrtpackages%) do echo.%%i>>%instdir%\msys64\etc\pac-%2.pk
+    set "compiler=%instdir%\msys64\%~2%~1\bin\gcc.exe"
+    set prefix=mingw-w64-ucrt-x86_64-
+)
+if exist %compiler% set found=1
+if %found%==1 GOTO :EOF
+echo.-------------------------------------------------------------------------------
+echo.install %~2%~1 compiler
+echo.-------------------------------------------------------------------------------
 (
     echo.printf '\033]0;install %1 bit compiler\007'
     echo.[[ "$(uname)" = *6.1* ]] ^&^& nargs="-n 4"
-    echo.sed 's/^^/%prefix%/g' /etc/pac-mingw.pk ^| xargs $nargs pacman -Sw --noconfirm --ask=20 --needed
-    echo.sed 's/^^/%prefix%/g' /etc/pac-mingw.pk ^| xargs $nargs pacman -S --noconfirm --ask=20 --needed
+    echo.sed 's/^^/%prefix%/g' /etc/pac-%2.pk ^| xargs $nargs pacman -Sw --noconfirm --ask=20 --needed
+    echo.sed 's/^^/%prefix%/g' /etc/pac-%2.pk ^| xargs $nargs pacman -S --noconfirm --ask=20 --needed
     echo.sleep 3
     echo.exit
 )>%build%\mingw.sh
-call :runBash mingw%1.log /build/mingw.sh
+call :runBash %~2%~1.log /build/mingw.sh
 
 if exist %compiler% set found=1
 if %found%==0 (
     echo -------------------------------------------------------------------------------
     echo.
-    echo.MinGW%1 compiler isn't installed; maybe the download didn't work
+    echo.%~2%~1 compiler isn't installed; maybe the download didn't work
     echo.Do you want to try it again?
     echo.
     echo -------------------------------------------------------------------------------
     set /P try="try again [y/n]: "
 
-    if [%try%]==[y] GOTO getmingw %1
+    if [%try%]==[y] GOTO getmingw %1 %2
     exit
 )
 endlocal

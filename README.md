@@ -226,7 +226,7 @@ For information about the compiler environment see the wiki, there you also have
 - Windows 64-bits (tested with Win10 & Win11 64-bits)
   - 32-bit hosts are not supported.
 - NTFS drive
-- 23GB+ disk space for a full 32 and 64-bit build, 18GB+ for 64-bit
+- 32GB+ disk space for building on each environment, 18GB+ for MINGW64
 - 4GB+ RAM
 - At least Powershell 4, Powershell core is not supported at this time
   - Powershell 5.1 can be downloaded [here](https://www.microsoft.com/en-us/download/details.aspx?id=54616)
@@ -258,7 +258,7 @@ How to use it:
 - Select if you want to compile for Windows 32-bit, 64-bit or both
 - Select if you want to compile non-free tools like "fdk-aac"
 - Select the numbers of CPU (cores) you want to use
-- Wait a little bit, and hopefully after a while you'll find all your "*.exe" tools under local[32|64]\bin-(audio|global|video)
+- Wait a little bit, and hopefully after a while you'll find all your "*.exe" tools under local[32|64]-[mingw|clang|ucrt]\bin-(audio|global|video)
 
 The script writes an .ini file at /build/media-autobuild_suite.ini, so you only need to make these choices the first time what you want to build.
 
@@ -279,7 +279,7 @@ If there's some error during compilation follow these steps:
 1. Make sure you're using the latest version of this suite by downloading the [latest version](https://github.com/m-ab-s/media-autobuild_suite/archive/master.zip) and replacing all files with the new ones;
 2. If you know which part it's crashing on, delete that project's folder in /build and run the script again (ex: if x264 is failing, try deleting x264-git folder in /build);
 3. If it still doesn't work, [create an issue](https://github.com/m-ab-s/media-autobuild_suite/issues/new) and paste the URL to `logs.zip` that the script gives or attach the file yourself to the issue page.
-4. If the problem isn't reproducible by the contributors of the suite, it's probably a problem on your side. Delete /msys64 and /local[32|64] if they exist. /build is usually safe to keep and saves time;
+4. If the problem isn't reproducible by the contributors of the suite, it's probably a problem on your side. Delete /msys64 and /local[32|64]-[mingw|clang|ucrt] if they exist. /build is usually safe to keep and saves time;
 5. If the problem is reproducible, it could be a problem with the package itself or the contributors will find a way to probably make it work.
 6. If you compile with `--enable-cuda-nvcc`, see [Notes about CUDA SDK](#notes-about-cuda-sdk)
 
@@ -319,9 +319,9 @@ If there's some error during compilation follow these steps:
 
 --------
 
-`/local32|64/etc/custom_profile` & `$HOME/custom_build_options`
+`/local[32|64]-[mingw|clang|ucrt]/etc/custom_profile` & `$HOME/custom_build_options`
 
-- Put here any general/platform tweaks that you need for _your_ specific environment. See `/local32|64/etc/profile2.local` for example usage.
+- Put here any general/platform tweaks that you need for _your_ specific environment. See `/local[32|64]-[mingw|clang|ucrt]/etc/profile2.local` for example usage.
 
 ## Custom Patches
 
@@ -343,9 +343,9 @@ Using custom patches is not officially supported, if you do use custom patches, 
 - The commands will run in the cloned/unzipped folder unless otherwise stated. (flac_extra.sh would run commands within flac-git)
 
 To reference the cloned folder itself (`flac-git` `ffmpeg-git`) you can use the variable `${REPO_DIR}`.
-To reference the generated build folder, you would need to use `${REPO_DIR}/build-${bits}` to reference the build-64bit folder for 64 bit builds or build-32bit folder for 32 bit builds.
+To reference the generated build folder, you would need to use `${REPO_DIR}/build-${MSYSTEM}` to reference the build-64bit folder for 64 bit builds or build-32bit folder for 32 bit builds.
 
-- For some packages, the build folder may be slightly different (`build-shared-${bits}` for shared ffmpeg or `build-light-${bits}` for light build, etc. Try to compile at least once to see what folders are generated or look through the [compile script](build/media-suite_compile.sh))
+- For some packages, the build folder may be slightly different (`build-shared-${MSYSTEM}` for shared ffmpeg or `build-light-${MSYSTEM}` for light build, etc. Try to compile at least once to see what folders are generated or look through the [compile script](build/media-suite_compile.sh))
 
 If you are building for both 32 and 64-bit, you can gate certain commands using `if [[ $bits = 64bit ]]; then <command>; fi` to only run them when building for 64 bits.\
 Be careful with certain packages due to their unique build process (x265, x264, and some others) so make sure to check the compile script
@@ -365,9 +365,9 @@ _pre_cmake(){
     # Downloads the patch and then applies the patch
     do_patch "https://gist.githubusercontent.com/1480c1/9fa9292afedadcea2b3a3e067e96dca2/raw/50a3ed39543d3cf21160f9ad38df45d9843d8dc5/0001-Example-patch-for-learning-purpose.patch"
     # Change directory to the build folder
-    cd_safe "build-${bits}"
+    cd_safe "build-${MSYSTEM}"
     # Run cmake with custom options. This will override the previous cmake commands.
-    # $LOCALDESTDIR refers to local64 or local32
+    # $LOCALDESTDIR refers to local[32|64]-[mingw|clang|ucrt]
     cmake .. -G"Ninja" -DCMAKE_INSTALL_PREFIX="$LOCALDESTDIR" \
         -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang \
         -DBUILD_SHARED_LIBS=off -DENABLE_TOOLS=off
@@ -381,7 +381,7 @@ _post_cmake(){
 # Commands to run before building using ninja
 _pre_ninja(){
     # Change directory to the build folder (Absolute path or relative to aom-git)
-    cd_safe "build-${bits}"
+    cd_safe "build-${MSYSTEM}"
     # applies a local patch (Absolute or relative to aom-git)
     do_patch "My-Custom-Patches/test-diff-files.diff"
     # run a custom ninja command.
@@ -452,7 +452,7 @@ If running the above command produces a path with a space, you will need to eith
 
 ### Nothing should be disabled manually when installing CUDA SDK as disabling random things can cause the compilation to fail
 
-For example, if you need to manually set the `CUDA_PATH` and include in the `PATH` the binaries for MSVC `cl.exe` and `nvcc.exe`, add this bit of bash script inside a text file in `/local64/etc/custom_profile`:
+For example, if you need to manually set the `CUDA_PATH` and include in the `PATH` the binaries for MSVC `cl.exe` and `nvcc.exe`, add this bit of bash script inside a text file in `/local64-mingw/etc/custom_profile`:
 
 ```bash
 # adapt these to your environment
