@@ -2,7 +2,7 @@
 
 ## Libraries using pkg-config
 
-Most libs use pkg-config files to check if they exist, so for most libs in this list all you have to do is delete the corresponding `<libname>.pc` file in `/local[32|64]/lib/pkgconfig/`:
+Most libs use pkg-config files to check if they exist, so for most libs in this list all you have to do is delete the corresponding `<libname>.pc` file in `/local[32|64]-[mingw|clang|ucrt]/lib/pkgconfig/`:
 
     aom
     aribb24
@@ -100,7 +100,7 @@ Most libs use pkg-config files to check if they exist, so for most libs in this 
 
 ## Libraries not using pkg-config
 
-To recompile these libs, delete `<libname>.a` with the same name in `/local[32|64]/lib`:
+To recompile these libs, delete `<libname>.a` with the same name in `/local[32|64]-[mingw|clang|ucrt]/lib`:
 
     libdl
     libflite
