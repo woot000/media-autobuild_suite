@@ -1855,9 +1855,12 @@ if [[ $x264 != no ]] ||
                 [[ -f config.mak ]] && log "distclean" make distclean
                 do_uninstall "${_check[@]}"
                 create_build_dir
-                log configure ../configure --prefix="$LOCALDESTDIR/opt/lightffmpeg"
+                get_custom_flags userflags
+                ( [[ -n $userflags ]] && export "${userflags[@]}";
+                    log configure ../configure --prefix="$LOCALDESTDIR/opt/lightffmpeg" )
                 do_make install-lib
                 do_checkIfExist
+                unset userflags
             fi
             cd_safe "$LOCALBUILDDIR"/x264-git
         else
@@ -1886,15 +1889,17 @@ if [[ $x264 != no ]] ||
         do_uninstall "${_check[@]}"
         check_custom_patches
         create_build_dir
+        get_custom_flags userflags
         extra_script pre configure
-        PKGCONFIG="$PKG_CONFIG" CFLAGS="${CFLAGS// -O2 / }" \
-            log configure ../configure "${extracommands[@]}"
+        ( [[ -n $userflags ]] && export "${userflags[@]}";
+            PKGCONFIG="$PKG_CONFIG" CFLAGS="${CFLAGS// -O2 / }" \
+            log configure ../configure "${extracommands[@]}" )
         extra_script post configure
         do_make
         do_makeinstall
         do_checkIfExist
         PKG_CONFIG_PATH=$old_PKG_CONFIG_PATH
-        unset extracommands x264_build old_PKG_CONFIG_PATH
+        unset extracommands userflags x264_build old_PKG_CONFIG_PATH
     fi
     unset _bitdepth
 else
@@ -1917,14 +1922,17 @@ if [[ ! $x265 = n ]] && do_vcs "$SOURCE_REPO_X265"; then
 
     do_x265_cmake() {
         do_print_progress "Building $1" && shift 1
+        get_custom_flags userflags
         extra_script pre cmake
-        log "cmake" cmake "$(get_first_subdir -f)/source" -G Ninja \
-        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
-        -DCMAKE_INSTALL_PREFIX="$LOCALDESTDIR" -DBIN_INSTALL_DIR="$LOCALDESTDIR/bin-video" \
-        -DENABLE_SHARED=OFF -DENABLE_CLI=OFF -DHIGH_BIT_DEPTH=ON \
-        -DENABLE_HDR10_PLUS=ON $xpsupport -DCMAKE_CXX_COMPILER="$LOCALDESTDIR/bin/${CXX#ccache }.bat" \
-        -DCMAKE_TOOLCHAIN_FILE="$LOCALDESTDIR/etc/toolchain.cmake" "$@"
+        ( [[ -n $userflags ]] && export "${userflags[@]}";
+            log "cmake" cmake "$(get_first_subdir -f)/source" -G Ninja \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DCMAKE_INSTALL_PREFIX="$LOCALDESTDIR" -DBIN_INSTALL_DIR="$LOCALDESTDIR/bin-video" \
+            -DENABLE_SHARED=OFF -DENABLE_CLI=OFF -DHIGH_BIT_DEPTH=ON \
+            -DENABLE_HDR10_PLUS=ON $xpsupport -DCMAKE_CXX_COMPILER="$LOCALDESTDIR/bin/${CXX#ccache }.bat" \
+            -DCMAKE_TOOLCHAIN_FILE="$LOCALDESTDIR/etc/toolchain.cmake" "$@" )
         extra_script post cmake
+        unset userflags
         do_ninja
     }
     [[ $standalone = y || $av1an = y ]] && cli=-DENABLE_CLI=ON
@@ -2864,9 +2872,11 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
             _check+=(bin-global/mujs.exe)
             sed -i "s;-lreadline;$($PKG_CONFIG --libs readline);g" Makefile
         fi
+        get_custom_flags userflags
         extra_script pre make
-        TEMP="${TEMP:-/tmp}" CPATH="${CPATH:-}" log "make" "$(command -v make)" \
-            "${mujs_targets[@]}" prefix="$LOCALDESTDIR" bindir="$LOCALDESTDIR/bin-global"
+        ( [[ -n $userflags ]] && export "${userflags[@]}";
+            TEMP="${TEMP:-/tmp}" CPATH="${CPATH:-}" log "make" "$(command -v make)" \
+            "${mujs_targets[@]}" prefix="$LOCALDESTDIR" bindir="$LOCALDESTDIR/bin-global" )
         extra_script post make
         extra_script pre install
         [[ $standalone != n ]] && do_install build/release/mujs "$LOCALDESTDIR/bin-global"
@@ -2876,7 +2886,7 @@ if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; t
         extra_script post install
         grep_or_sed "Requires.private:" "$LOCALDESTDIR/lib/pkgconfig/mujs.pc" \
             's;Version:.*;&\nRequires.private: readline;'
-        unset mujs_targets
+        unset mujs_targets userflags
         do_checkIfExist
     fi
 
@@ -3295,15 +3305,17 @@ if [[ $ffmbc = y ]] && do_vcs "$SOURCE_REPO_FFMBC"; then
     _notrequired=true
     do_patch "https://github.com/bcoudurier/FFmbc/compare/ffmbc...1480c1:shr-ffmbc.patch" am
     create_build_dir
+    get_custom_flags userflags
     # Too many errors with GCC 15 due to really old code.
-    CFLAGS+=" -Wno-error=incompatible-pointer-types" \
+    ( [[ -n $userflags ]] && export "${userflags[@]}";
+        CFLAGS+=" -Wno-error=incompatible-pointer-types" \
         log configure ../configure --target-os=mingw32 --enable-gpl \
         --disable-{dxva2,ffprobe} --extra-cflags=-DNO_DSHOW_STRSAFE \
-        --cc="$CC" --ld="$CXX"
+        --cc="$CC" --ld="$CXX" )
     do_make
     do_install ffmbc.exe bin-video/
     do_checkIfExist
-    unset _notrequired
+    unset _notrequired userflags
 fi
 
 do_simple_print -p "${orange}Finished $MSYSTEM compilation of all tools${reset}"
