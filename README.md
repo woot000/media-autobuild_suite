@@ -429,6 +429,15 @@ _post_make(){
 For a list of possible directive, look under `unset_extra_script` in [media-suite_helper.sh](build/media-suite_helper.sh).
 Beware as they may change in the future.
 
+- To use custom environment variables, create a text file with the filename: `<repository's name>_flags.txt`.
+  - If you want your environment variables to apply only for a specific build environment, name the text file: `<repository's name>_flags_<MSYSTEM>.txt`. The file with the named environment takes priority over the non-specific file.
+  - Examples: `ffmpeg_flags.txt` will be used for all environments. `SVT_AV1_flags_CLANG64.txt` will take priority over `SVT_AV1_flags.txt` if you are building with CLANG64, but otherwise the latter will be used for all other environments.
+Example Environment Variables File: `/build/ffmpeg_flags.txt` for `ffmpeg-git`
+```
+CFLAGS: -march=native -O3
+LDFLAGS: -Wl,--gc-sections -s
+```
+
 ## Notes about CUDA SDK
 
 --------
