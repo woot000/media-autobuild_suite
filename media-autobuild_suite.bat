@@ -142,11 +142,34 @@ set mpv_options_basic=--disable-debug-build "--lua=luajit"
 set mpv_options_full=dvdnav cdda #egl-angle #html-build ^
 #pdf-build libmpv-shared openal sdl2 #sdl2-gamepad #sdl2-audio #sdl2-video
 
+:: basic options
+set gegl_options_basic="-Ddocs=false" workshop
+
+:: options that are always compiled, whether or not they are disabled
+set gegl_options_builtin=gdk-pixbuf gexiv2 lcms ^
+librsvg libtiff pango pangocairo poppler
+
+:: optional features
+set gegl_options_full=graphviz jasper lensfun libav libraw ^
+libspiro "-Dlua=disabled" maxflow openexr openmp pygobject sdl2 umfpack webp
+
+:: basic options
+set gimp_options_basic=enable-console-bin "-Dwin32-debug-console=enabled" ^
+enable-multiproc "-Dprofiling=false" print vector-icons
+
+:: optional features
+set gimp_options_full=aa cairo-pdf fits ghostscript heif ^
+ilbm jpeg2000 jpeg-xl mng openexr openmp webp wmf xpm
+
+:: optional language plug-ins
+set gimp_options_plugins="-Dlua=false" vala
+
 set iniOptions=arch license2 vpx2 x2643 x2652 other265 flac fdkaac mediainfo ^
 soxB ffmpegB2 ffmpegUpdate ffmpegChoice mp4box rtmpdump mplayer2 mpv cores deleteSource ^
 strip pack logging bmx standalone updateSuite av1an aom faac exhale ffmbc curl cyanrip2 ^
 rav1e ripgrep dav1d libavif libheif vvc uvg266 jq dssim gifski avs2 dovitool hdr10plustool timeStamp ^
-noMintty ccache svthevc svtav1 svtvp9 xvc jo vlc jpegxl vvenc vvdec ffmpegPath pkgUpdateTime
+noMintty ccache svthevc svtav1 svtvp9 xvc jo vlc jpegxl vvenc vvdec ffmpegPath gimp pkgUpdateTime ^
+archflags optflags sizeflags
 @rem re-add autouploadlogs if we find some way to upload to github directly instead
 
 set deleteIni=0
@@ -907,7 +930,7 @@ if [0]==[%ffmpegUpdateINI%] (
     echo. Always build FFmpeg when libraries have been updated?
     echo. 1 = Yes
     echo. 2 = No
-    echo. 3 = Only build FFmpeg/mpv and missing dependencies
+    echo. 3 = Only build FFmpeg/GIMP/mpv and missing dependencies
     echo.
     echo. FFmpeg is updated a lot so you only need to select this if you
     echo. absolutely need updated external libraries in FFmpeg.
@@ -1119,6 +1142,70 @@ if %buildvlc%==1 set "vlc=y"
 if %buildvlc%==2 set "vlc=n"
 if %buildvlc% GTR 2 GOTO vlc
 if %deleteINI%==1 echo.vlc=^%buildvlc%>>%ini%
+
+:gimp
+if [0]==[%gimpINI%] (
+    echo -------------------------------------------------------------------------------
+    echo -------------------------------------------------------------------------------
+    echo.
+    echo. Build GIMP (GNU Image Manipulation Program^)?
+    echo.
+    echo. 1 = Yes (builds into an isolated and relocatable directory^)
+    echo. 2 = No
+    echo.
+    echo -------------------------------------------------------------------------------
+    echo -------------------------------------------------------------------------------
+    set /P buildgimp="Build GIMP: "
+) else set buildgimp=%gimpINI%
+
+if "%buildgimp%"=="" GOTO gimp
+if %buildgimp%==1 set "gimp=y"
+if %buildgimp%==1 (
+    set "gimp=y"
+    if not exist %build%\gegl_options.txt (
+        (
+            echo.# The following options follow meson's syntax (-Doption=[true/false/enabled/disabled]^)
+            echo.# Basic options (true/false^)
+            call :writeOptionTrue %gegl_options_basic%
+            echo.
+            echo.# Built-in features (true/false^)
+            call :writeOptionEnabled %gegl_options_builtin%
+            echo.
+            echo.# Optional features (enabled/disabled^)
+            call :writeOptionEnabled %gegl_options_full%
+            )>%build%\gegl_options.txt
+        echo -------------------------------------------------------------------------------
+        echo. File with default gegl options has been created in
+        echo. %build%\gegl_options.txt
+        echo.
+        echo. Edit it now or leave it unedited to compile according to defaults.
+        echo -------------------------------------------------------------------------------
+        pause
+        )
+    if not exist %build%\gimp_options.txt (
+        (
+            echo.# The following options follow meson's syntax (-Doption=[true/false/enabled/disabled]^)
+            echo.# Basic options (true/false^)
+            call :writeOptionTrue %gimp_options_basic%
+            echo.
+            echo.# Optional features (enabled/disabled^)
+            call :writeOptionEnabled %gimp_options_full%
+            echo.
+            echo.# Optional language plugins (enabled/disabled^)
+            call :writeOptionEnabled %gimp_options_plugins%
+            )>%build%\gimp_options.txt
+        echo -------------------------------------------------------------------------------
+        echo. File with default GIMP options has been created in
+        echo. %build%\gimp_options.txt
+        echo.
+        echo. Edit it now or leave it unedited to compile according to defaults.
+        echo -------------------------------------------------------------------------------
+        pause
+        )
+    )
+if %buildgimp%==2 set "gimp=n"
+if %buildgimp% GTR 2 GOTO gimp
+if %deleteINI%==1 echo.gimp=^%buildgimp%>>%ini%
 
 :bmx
 if [0]==[%bmxINI%] (
@@ -1630,6 +1717,48 @@ if [0]==[%pkgUpdateTimeINI%] (
 ) else set pkgUpdateTime=%pkgUpdateTimeINI%
 if %deleteINI%==1 echo.pkgUpdateTime=^%pkgUpdateTime%>>%ini%
 
+rem archflags
+if [0]==[%archflagsINI%] (
+    set archflagsF=2
+) else set archflagsF=%archflagsINI%
+if %deleteINI%==1 echo.archflags=^%archflagsF%>>%ini%
+if %archflagsF%=="" set "archflags=-mtune=generic"
+if %archflagsF%==1 set "archflags=-march=native"
+if %archflagsF%==2 set "archflags=-mtune=generic"
+if %archflagsF%==3 set "archflags="
+if %archflagsF% GTR 3 set "archflags=-mtune=generic"
+
+rem optflags
+if [0]==[%optflagsINI%] (
+    set optflagsF=2
+) else set optflagsF=%optflagsINI%
+if %deleteINI%==1 echo.optflags=^%optflagsF%>>%ini%
+if %optflagsF%=="" set "optflags=-O2"
+if %optflagsF%==1 set "optflags=-O1"
+if %optflagsF%==2 set "optflags=-O2"
+if %optflagsF%==3 set "optflags=-O3"
+if %optflagsF%==4 set "optflags=-Ofast"
+if %optflagsF%==5 set "optflags=-O0"
+if %optflagsF%==6 set "optflags=-Og"
+if %optflagsF%==7 set "optflags=-Os"
+if %optflagsF%==8 set "optflags=-Oz"
+if %optflagsF%==9 set "optflags="
+if %optflagsF% GTR 9 set "optflags=-O2"
+
+rem sizeflags
+if [0]==[%sizeflagsINI%] (
+    set sizeflagsF=2
+) else set sizeflagsF=%sizeflagsINI%
+if %deleteINI%==1 echo.sizeflags=^%sizeflagsF%>>%ini%
+if %sizeflagsF%=="" set "sizeflags=" && set "sizelinkerflags="
+if %sizeflagsF%==1 set "sizeflags=" && set "sizelinkerflags=-s"
+if %sizeflagsF%==2 set "sizeflags=" && set "sizelinkerflags="
+if %sizeflagsF%==3 set "sizeflags=-fdata-sections -ffunction-sections" && set "sizelinkerflags=-Wl,--gc-sections"
+if %sizeflagsF%==4 set "sizeflags=-fdata-sections -ffunction-sections" && set "sizelinkerflags=-Wl,--as-needed -Wl,--gc-sections"
+if %sizeflagsF%==5 set "sizeflags=-fdata-sections -ffunction-sections" && set "sizelinkerflags=-Wl,--gc-sections -s"
+if %sizeflagsF%==6 set "sizeflags=-fdata-sections -ffunction-sections" && set "sizelinkerflags=-Wl,--as-needed -Wl,--gc-sections -s"
+if %sizeflagsF% GTR 6 set "sizeflags=" && set "sizelinkerflags="
+
 if %build32%==yes (
     if %CC%==clang (
         echo ----------------------------------------------------------------------
@@ -1989,7 +2118,7 @@ set compileArgs=--cpuCount=%cpuCount% --msysEnv=%msysEnv% ^
 --vvc=%vvc% --uvg266=%uvg266% --vvenc=%vvenc% --vvdec=%vvdec% --jq=%jq% --jo=%jo% --dssim=%dssim% ^
 --gifski=%gifski% --avs2=%avs2% --dovitool=%dovitool% --hdr10plustool=%hdr10plustool% --timeStamp=%timeStamp% ^
 --noMintty=%noMintty% --ccache=%ccache% --svthevc=%svthevc% --svtav1=%svtav1% --svtvp9=%svtvp9% ^
---xvc=%xvc% --vlc=%vlc% --libavif=%libavif% --libheif=%libheif% --jpegxl=%jpegxl% --av1an=%av1an% ^
+--xvc=%xvc% --vlc=%vlc% --libavif=%libavif% --libheif=%libheif% --jpegxl=%jpegxl% --gimp=%gimp% --av1an=%av1an% ^
 --ffmpegPath=%ffmpegPath% --exitearly=%MABS_EXIT_EARLY%
     @REM --autouploadlogs=%autouploadlogs%
     set "noMintty=%noMintty%"
@@ -2077,11 +2206,11 @@ goto :EOF
     echo.PKG_CONFIG="${MINGW_PREFIX}/bin/pkgconf --keep-system-cflags --static"
     echo.PKG_CONFIG_PATH="${LOCALDESTDIR}/lib/pkgconfig:${MINGW_PREFIX}/lib/pkgconfig"
     echo.
-    echo.CFLAGS="-D_FORTIFY_SOURCE=2 -fstack-protector-strong" # security related flags
-    echo.CFLAGS+=" -mtune=generic -O2 -pipe" # performance related flags
+    echo.CFLAGS="-D_FORTIFY_SOURCE=2 -fstack-protector-strong %sizeflags%" # security related flags
+    echo.CFLAGS+=" %archflags% %optflags% -pipe" # performance related flags
     echo.CFLAGS+=" -D__USE_MINGW_ANSI_STDIO=1" # mingw-w64 specific flags for c99 printf
     echo.CXXFLAGS="${CFLAGS}" # copy CFLAGS to CXXFLAGS
-    echo.LDFLAGS="${CFLAGS} -static-libgcc -liconv" # copy CFLAGS to LDFLAGS
+    echo.LDFLAGS="${CFLAGS} %sizelinkerflags% -static-libgcc-liconv " # copy CFLAGS to LDFLAGS
     echo.RUSTFLAGS="-Clink-arg=-liconv"
     echo.case "$CC" in
     echo.*clang^)
@@ -2133,6 +2262,40 @@ for %%i in (%*) do (
         echo #--enable-!_opt:~1!
     ) else (
         echo --enable-!_opt!
+    )
+)
+endlocal
+goto :EOF
+
+:writeOptionTrue
+setlocal enabledelayedexpansion
+for %%i in (%*) do (
+    set _opt=%%~i
+    if ["!_opt:~0,2!"]==["-D"] (
+        echo !_opt!
+    ) else if ["!_opt:~0,3!"]==["#-D"] (
+        echo !_opt!
+    ) else if ["!_opt:~0,1!"]==["#"] (
+        echo #-D!_opt:~1!=true
+    ) else (
+        echo -D!_opt!=true
+    )
+)
+endlocal
+goto :EOF
+
+:writeOptionEnabled
+setlocal enabledelayedexpansion
+for %%i in (%*) do (
+    set _opt=%%~i
+    if ["!_opt:~0,2!"]==["-D"] (
+        echo !_opt!
+    ) else if ["!_opt:~0,3!"]==["#-D"] (
+        echo !_opt!
+    ) else if ["!_opt:~0,1!"]==["#"] (
+        echo #-D!_opt:~1!=enabled
+    ) else (
+        echo -D!_opt!=enabled
     )
 )
 endlocal
