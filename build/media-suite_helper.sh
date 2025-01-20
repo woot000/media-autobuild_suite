@@ -1279,7 +1279,7 @@ do_getGIMPConfig() {
     GIMP_OPTS=()
     IFS=$'\n' read -d '' -r -a GIMP_TEMP_OPTS < <(do_readoptionsfile "$LOCALBUILDDIR/gimp_options.txt")
     do_removeOption GIMP_TEMP_OPTS \
-        "-D(alsa|appdata-test|check-update|enable-default-bin|gi-docgen|g-ir-doc|gimpdir|gudev|headless-tests|libbacktrace|libunwind|linux-input|javascript|xcursor)=(enabled|disabled|true|false|yes|no|auto)"
+        "-D(alsa|appdata-test|check-update|enable-default-bin|gi-docgen|gimpdir|gudev|headless-tests|libbacktrace|libunwind|linux-input|javascript|xcursor)=(enabled|disabled|true|false|yes|no|auto)"
     for opt in "${GIMP_TEMP_OPTS[@]}"; do
         [[ -n $opt ]] && GIMP_OPTS+=("$opt")
     done

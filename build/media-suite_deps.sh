@@ -25,7 +25,7 @@ SOURCE_REPO_DOVI_TOOL=https://github.com/quietvoid/dovi_tool.git
 SOURCE_REPO_DRMINGW=https://github.com/jrfonseca/drmingw.git
 SOURCE_REPO_DSSIM=https://github.com/kornelski/dssim.git
 SOURCE_REPO_EXHALE=https://gitlab.com/ecodis/exhale.git
-SOURCE_REPO_EXIV2=https://github.com/Exiv2/exiv2.git
+SOURCE_REPO_EXIV2=https://github.com/Exiv2/exiv2.git#commit=d86cb01566d89d2a3c5a7a9c365c29e387e595fa
 SOURCE_REPO_FAAC=https://github.com/knik0/faac.git
 SOURCE_REPO_FDKAAC=https://github.com/mstorsjo/fdk-aac
 SOURCE_REPO_FDKAACEXE=https://github.com/nu774/fdkaac
@@ -47,7 +47,7 @@ SOURCE_REPO_GIMP=https://gitlab.gnome.org/GNOME/gimp.git
 SOURCE_REPO_GLIB=https://gitlab.gnome.org/GNOME/glib.git
 SOURCE_REPO_GLIB_NETWORKING=https://gitlab.gnome.org/GNOME/glib-networking.git
 SOURCE_REPO_GLSLANG=https://github.com/KhronosGroup/glslang.git
-SOURCE_REPO_GOBJECT_INTROSPECTION=https://gitlab.gnome.org/GNOME/gobject-introspection.git
+SOURCE_REPO_GOBJECT_INTROSPECTION=https://gitlab.gnome.org/GNOME/gobject-introspection.git#commit=39101b2728ccebb4eaa8e26f582f6a4d95f22717
 SOURCE_REPO_GPAC=https://github.com/gpac/gpac.git
 SOURCE_REPO_GRAPHVIZ=https://gitlab.com/graphviz/graphviz.git
 SOURCE_REPO_GSETTINGS_DESKTOP_SCHEMAS=https://gitlab.gnome.org/GNOME/gsettings-desktop-schemas.git
@@ -64,6 +64,7 @@ SOURCE_REPO_LEPT=https://github.com/DanBloomberg/leptonica.git
 SOURCE_REPO_LGI=https://github.com/lgi-devs/lgi.git#tag=0.9.2
 SOURCE_REPO_LIBAACS=https://code.videolan.org/videolan/libaacs.git
 SOURCE_REPO_LIBAOM=https://aomedia.googlesource.com/aom
+SOURCE_REPO_LIBARCHIVE=https://github.com/libarchive/libarchive.git
 SOURCE_REPO_LIBASS=https://github.com/libass/libass.git
 SOURCE_REPO_LIBAVIF=https://github.com/AOMediaCodec/libavif.git
 SOURCE_REPO_LIBBDPLUS=https://code.videolan.org/videolan/libbdplus.git
