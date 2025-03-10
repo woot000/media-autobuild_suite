@@ -2140,7 +2140,7 @@ goto :EOF
     echo.CFLAGS+=" %archflags% %optflags% -pipe" # performance related flags
     echo.CFLAGS+=" -D__USE_MINGW_ANSI_STDIO=1" # mingw-w64 specific flags for c99 printf
     echo.CXXFLAGS="${CFLAGS}" # copy CFLAGS to CXXFLAGS
-    echo.LDFLAGS="${CFLAGS} %sizelinkerflags% -static-libgcc-liconv " # copy CFLAGS to LDFLAGS
+    echo.LDFLAGS="${CFLAGS} %sizelinkerflags% -static-libgcc -liconv " # copy CFLAGS to LDFLAGS
     echo.RUSTFLAGS="-Clink-arg=-liconv"
     echo.case "$CC" in
     echo.*clang^)

@@ -835,6 +835,7 @@ do_readoptionsfile() {
 
 do_readflagsfile() {
     local filename="$1"
+    local appendFlags=n
     if [[ -f $filename ]]; then
         IFS=$'\n' read -d '' -r -a envName < <(sed -r '
             # remove commented text
@@ -850,6 +851,8 @@ do_readflagsfile() {
             # remove trailing whitespace
             s/\s+$//
             ' "$filename" | tr -d '\r') # cut cr out from any crlf files
+        # look for #append=[y|true]
+        appendFlags=`grep -Po '^\# append=\K.*' $filename | sed -e 's/^\s*//'`
         IFS=$'\n' read -d '' -r -a envVar < <(sed -r '
             # remove commented text
             s/#.*//
@@ -866,7 +869,9 @@ do_readflagsfile() {
             ' "$filename" | tr -d '\r') # cut cr out from any crlf files
         envAll=()
         for ((i = 0; i < ${#envName[@]}; i++)); do
-            envAll+=("${envName[$i]}=${envVar[$i]}")
+            [[ $appendFlags == y || $appendFlags == "true" ]] &&
+                envAll+=("${envName[$i]}+= ${envVar[$i]}") ||
+                envAll+=("${envName[$i]}=${envVar[$i]}")
             echo ${envAll[$i]}
         done
         [[ -n $envAll ]] && do_simple_print "Imported flags from ${filename##*/}" >&2
