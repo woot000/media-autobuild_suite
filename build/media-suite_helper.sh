@@ -287,7 +287,7 @@ do_vcs() {
 
     cd_safe "$vcsFolder-git"
 
-    if [[ $ffmpegUpdate == onlyFFmpeg && $vcsFolder != ffmpeg && $vcsFolder != mpv ]] &&
+    if [[ $ffmpegUpdate == onlyFFmpeg && $vcsFolder != ffmpeg && $vcsFolder != gegl && $vcsFolder != gimp && $vcsFolder != mpv ]] &&
         files_exist "${vcsCheck[@]:-$vcsFolder.pc}"; then
         do_print_status "${vcsFolder} git" "$green" "Already built"
         unset_extra_script
@@ -638,6 +638,7 @@ do_pack() {
 do_zipman() {
     local file files
     local man_dirs=(/local{32,64}-{mingw,clang,ucrt}/share/man)
+    [[ $gimp = y ]] && man_dirs+=(/local{32,64}-{mingw,clang,ucrt}/gimp/share/man)
     files=$(find "${man_dirs[@]}" -type f \! -name "*.gz" \! -name "*.db" \! -name "*.bz2" 2> /dev/null)
     for file in $files; do
         gzip -9 -n -f "$file"
@@ -691,7 +692,7 @@ file_installed() {
     local file silent
     [[ $1 == "-s" ]] && silent=true && shift
     case $1 in
-    /* | ./*)
+    /* | ./* | ../*)
         file="$1"
         ;;
     *.pc)
@@ -1232,6 +1233,167 @@ mpv_build_args() (
         fi
     done
 )
+
+do_getGeglConfig() {
+    local GEGL_TEMP_OPTS=()
+    GEGL_OPTS=()
+    IFS=$'\n' read -d '' -r -a GEGL_TEMP_OPTS < <(do_readoptionsfile "$LOCALBUILDDIR/gegl_options.txt")
+    do_removeOption GEGL_TEMP_OPTS \
+        "-D(cairo|introspection|gi-docgen|gtk-doc|libv4l|libv4l2|mrg)=(enabled|disabled|true|false|auto)"
+    for opt in "${GEGL_TEMP_OPTS[@]}"; do
+        [[ -n $opt ]] && GEGL_OPTS+=("$opt")
+    done
+}
+gegl_enabled() {
+    local option
+    for option in "${GEGL_OPTS[@]}"; do
+        [[ $option =~ "-D$1="(enabled|true)$ ]] && return
+    done
+    return 1
+}
+gegl_disabled() {
+    local option
+    for option in "${GEGL_OPTS[@]}"; do
+        [[ $option =~ "-D$1="(disabled|false)$ ]] && return
+    done
+    return 1
+}
+gegl_enabled_any() {
+    local opt
+    for opt; do
+        gegl_enabled "$opt" && return 0
+    done
+    return 1
+}
+gegl_disabled_any() {
+    local opt
+    for opt; do
+        gegl_disabled "$opt" && return 0
+    done
+    return 1
+}
+gegl_enabled_all() {
+    local opt
+    for opt; do
+        gegl_enabled "$opt" || return 1
+    done
+}
+gegl_disabled_all() {
+    local opt
+    for opt; do
+        gegl_disabled "$opt" || return 1
+    done
+}
+gegl_enable() {
+    local opt newopts=()
+    for opt in "${GEGL_OPTS[@]}"; do
+        if [[ $opt =~ "-D$1=false"$ ]]; then
+            newopts+=("-D$1=true")
+        elif [[ $opt =~ "-D$1=disabled"$ ]]; then
+            newopts+=("-D$1=enabled")
+        elif [[ $opt =~ "-D$1=no"$ ]]; then
+            newopts+=("-D$1=yes")
+        else
+            newopts+=("$opt")
+        fi
+    done
+    GEGL_OPTS=("${newopts[@]}")
+}
+gegl_disable() {
+    local opt newopts=()
+    for opt in "${GEGL_OPTS[@]}"; do
+        if [[ $opt =~ "-D$1=true"$ ]]; then
+            newopts+=("-D$1=false")
+        elif [[ $opt =~ "-D$1=enabled"$ ]]; then
+            newopts+=("-D$1=disabled")
+        elif [[ $opt =~ "-D$1=yes"$ ]]; then
+            newopts+=("-D$1=no")
+        else
+            newopts+=("$opt")
+        fi
+    done
+    GEGL_OPTS=("${newopts[@]}")
+}
+do_getGIMPConfig() {
+    local GIMP_TEMP_OPTS=()
+    GIMP_OPTS=()
+    IFS=$'\n' read -d '' -r -a GIMP_TEMP_OPTS < <(do_readoptionsfile "$LOCALBUILDDIR/gimp_options.txt")
+    do_removeOption GIMP_TEMP_OPTS \
+        "-D(alsa|appdata-test|check-update|enable-default-bin|gi-docgen|gimpdir|gudev|headless-tests|libbacktrace|libunwind|linux-input|javascript|xcursor)=(enabled|disabled|true|false|yes|no|auto)"
+    for opt in "${GIMP_TEMP_OPTS[@]}"; do
+        [[ -n $opt ]] && GIMP_OPTS+=("$opt")
+    done
+}
+gimp_enabled() {
+    local option
+    for option in "${GIMP_OPTS[@]}"; do
+        [[ $option =~ "-D$1="(enabled|true|yes)$ ]] && return
+    done
+    return 1
+}
+gimp_disabled() {
+    local option
+    for option in "${GIMP_OPTS[@]}"; do
+        [[ $option =~ "-D$1="(disabled|false|no)$ ]] && return
+    done
+    return 1
+}
+gimp_enabled_any() {
+    local opt
+    for opt; do
+        gimp_enabled "$opt" && return 0
+    done
+    return 1
+}
+gimp_disabled_any() {
+    local opt
+    for opt; do
+        gimp_disabled "$opt" && return 0
+    done
+    return 1
+}
+gimp_enabled_all() {
+    local opt
+    for opt; do
+        gimp_enabled "$opt" || return 1
+    done
+}
+gimp_disabled_all() {
+    local opt
+    for opt; do
+        gimp_disabled "$opt" || return 1
+    done
+}
+gimp_enable() {
+    local opt newopts=()
+    for opt in "${GIMP_OPTS[@]}"; do
+        if [[ $opt =~ "-D$1=false"$ ]]; then
+            newopts+=("-D$1=true")
+        elif [[ $opt =~ "-D$1=disabled"$ ]]; then
+            newopts+=("-D$1=enabled")
+        elif [[ $opt =~ "-D$1=no"$ ]]; then
+            newopts+=("-D$1=yes")
+        else
+            newopts+=("$opt")
+        fi
+    done
+    GIMP_OPTS=("${newopts[@]}")
+}
+gimp_disable() {
+    local opt newopts=()
+    for opt in "${GIMP_OPTS[@]}"; do
+        if [[ $opt =~ "-D$1=true"$ ]]; then
+            newopts+=("-D$1=false")
+        elif [[ $opt =~ "-D$1=enabled"$ ]]; then
+            newopts+=("-D$1=disabled")
+        elif [[ $opt =~ "-D$1=yes"$ ]]; then
+            newopts+=("-D$1=no")
+        else
+            newopts+=("$opt")
+        fi
+    done
+    GIMP_OPTS=("${newopts[@]}")
+}
 
 do_addOption() {
     local varname="$1" array opt
@@ -2325,7 +2487,7 @@ do_clean_old_builds() {
     local _old_libs=(j{config,error,morecfg,peglib}.h
         lib{jpeg,nettle,gnurx,regex}.{,l}a
         lib{opencore-amr{nb,wb},twolame,theora{,enc,dec},caca,magic,uchardet}.{,l}a
-        libSDL{,main}.{,l}a libopen{jpwl,mj2,jp2}.{a,pc}
+        libSDL{,main}.{,l}a libopen{jpwl,mj2}.{a,pc}
         include/{nettle,opencore-amr{nb,wb},theora,cdio,SDL,openjpeg-2.{1,2},luajit-2.0,uchardet,wels}
         regex.h magic.h
         {nettle,vo-aacenc,sdl,uchardet}.pc
