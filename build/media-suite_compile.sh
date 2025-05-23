@@ -80,6 +80,7 @@ while true; do
     --xvc=* ) xvc=${1#*=} && shift ;;
     --vlc=* ) vlc=${1#*=} && shift ;;
     --zlib=* ) zlib=${1#*=} && shift ;;
+    --gimp=* ) gimp=${1#*=} && shift ;;
     --exitearly=* ) exitearly=${1#*=} && shift ;;
     # --autouploadlogs=* ) autouploadlogs=${1#*=} && shift ;;
     -- ) shift && break ;;
@@ -114,6 +115,8 @@ cd_safe "$LOCALBUILDDIR"
 
 do_getFFmpegConfig "$license"
 declare -A MPV_OPTS="($(do_getMpvConfig))"
+do_getGeglConfig
+do_getGIMPConfig
 
 do_fix_pkgconfig_abspaths
 do_clean_old_builds
@@ -148,13 +151,13 @@ if [[ $packing = y &&
     do_install upx.exe /opt/bin/upx.exe
 fi
 
-if [[ "$ripgrep|$rav1e|$dssim|$libavif|$dovitool|$hdr10plustool" = *y* ]] ||
+if [[ "$ripgrep|$rav1e|$dssim|$libavif|$dovitool|$hdr10plustool|$gimp" = *y* ]] ||
     [[ $av1an = y ]] || [[ $gifski != n ]] || [[ $zlib = rs ]] || enabled librav1e; then
     do_pacman_install rust
     [[ $CC =~ clang ]] && rust_target_suffix="llvm"
 fi
 
-if [[ $libavif = y ]] || [[ $dovitool = y ]] || [[ $zlib = rs ]] || enabled librav1e; then
+if [[ $libavif = y ]] || [[ $dovitool = y ]] || [[ $zlib = rs ]] || [[ $gimp = y ]] || enabled librav1e; then
     do_pacman_install cargo-c
 fi
 
@@ -343,7 +346,8 @@ fi
 
 _deps=("$zlib_dir"/lib/libz.a)
 _check=(libxml2.a libxml2/libxml/xmlIO.h libxml-2.0.pc)
-if { enabled_any libxml2 libbluray || [[ $cyanrip = y ]] || ! mpv_disabled libbluray; } &&
+if { enabled_any libxml2 libbluray || [[ $cyanrip = y ]] ||
+    [[ $gimp = y ]] || ! mpv_disabled libbluray; } &&
     do_vcs "$SOURCE_REPO_LIBXML2"; then
     do_uninstall include/libxml2/libxml "${_check[@]}"
     extracommands=("-DLIBXML2_WITH_PYTHON=OFF" "-DLIBXML2_WITH_TESTS=OFF")
@@ -357,7 +361,7 @@ fi
 # Probably caused by https://gitlab.gnome.org/GNOME/libxml2/-/commit/93e8bb2a402012858500b608b4146cd5c756e34d
 grep_or_sed Requires.private "$LOCALDESTDIR/lib/pkgconfig/libxml-2.0.pc" 's/Requires:/Requires.private:/'
 
-if [[ $ffmpeg != no ]] && enabled libaribb24; then
+if { [[ $ffmpeg != no ]] && enabled libaribb24; } || [[ $gimp = y ]]; then
     _deps=("$zlib_dir"/lib/libz.a)
     _check=(libpng.{pc,{,l}a} libpng16.{pc,{,l}a} libpng16/png.h)
     if do_vcs "$SOURCE_REPO_LIBPNG"; then
@@ -369,7 +373,8 @@ if [[ $ffmpeg != no ]] && enabled libaribb24; then
 
     _deps=(libpng.{pc,a} libpng16.{pc,a})
     _check=(aribb24.pc libaribb24.{,l}a)
-    if do_vcs "$SOURCE_REPO_ARRIB24"; then
+    if [[ $ffmpeg != no ]] && enabled libaribb24 && 
+        do_vcs "$SOURCE_REPO_ARRIB24"; then
         do_patch "https://raw.githubusercontent.com/BtbN/FFmpeg-Builds/master/patches/aribb24/12.patch"
         do_patch "https://raw.githubusercontent.com/BtbN/FFmpeg-Builds/master/patches/aribb24/13.patch"
         do_patch "https://raw.githubusercontent.com/BtbN/FFmpeg-Builds/master/patches/aribb24/17.patch"
@@ -480,7 +485,7 @@ if [[ $curl = y ]]; then
     [[ $curl = y ]] && curl=schannel
 fi
 
-if enabled_any gnutls librtmp || [[ $rtmpdump = y || $curl = gnutls ]]; then
+if enabled_any gnutls librtmp || [[ $gimp = y || $rtmpdump = y || $curl = gnutls ]]; then
     do_pacman_install nettle
     grep_and_sed '__declspec(__dllimport__)' "$MINGW_PREFIX"/include/gmp.h \
         's|__declspec\(__dllimport__\)||g' "$MINGW_PREFIX"/include/gmp.h
@@ -502,7 +507,7 @@ if enabled_any gnutls librtmp || [[ $rtmpdump = y || $curl = gnutls ]]; then
     fi
 fi
 
-if [[ $curl = openssl ]] || { [[ $ffmpeg != no ]] && enabled openssl; }; then
+if [[ $curl = openssl || $gimp = y ]] || { [[ $ffmpeg != no ]] && enabled openssl; }; then
     do_pacman_install openssl
 fi
 hide_libressl -R
@@ -557,7 +562,7 @@ if [[ $mediainfo = y || $bmx = y || $curl != n ]]; then
     fi
 fi
 
-if [[ $mediainfo = y || $bmx = y || $curl != n || $cyanrip = y ]]; then
+if [[ $mediainfo = y || $bmx = y || $curl != n || $cyanrip = y || $gimp = y ]]; then
     do_pacman_install brotli nghttp2
     _check=(curl/curl.h libcurl.{{,l}a,pc})
     case $curl in
@@ -609,7 +614,8 @@ if [[ $exitearly = EE2 ]]; then
 fi
 
 if { { [[ $ffmpeg != no || $standalone = y ]] && enabled libtesseract; } ||
-    { [[ $standalone = y ]] && enabled libwebp; }; }; then
+    { [[ $standalone = y ]] && enabled libwebp; } ||
+    { [[ $gimp = y ]]; }; }; then
     _check=(libglut.a glut.pc)
     if do_vcs "$SOURCE_REPO_LIBGLUT" freeglut; then
         do_uninstall lib/cmake/FreeGLUT include/GL "${_check[@]}"
@@ -644,7 +650,8 @@ file_installed -s libtiff-4.pc &&
     grep_or_sed '-ldeflate' "$(file_installed libtiff-4.pc)" \
         's/Libs.private:.*/& -ldeflate/'
 
-if [[ $ffmpeg != no || $standalone = y ]] && enabled libwebp; then
+if { [[ $ffmpeg != no || $standalone = y ]] && enabled libwebp; } ||
+    { gimp_enabled webp || gegl_enabled webp; }; then
     do_pacman_install giflib
     _check=(libwebp{,mux}.{a,pc})
     [[ $standalone = y ]] && _check+=(libwebp{demux,decoder}.{a,pc}
@@ -664,7 +671,75 @@ if [[ $ffmpeg != no || $standalone = y ]] && enabled libwebp; then
     fi
 fi
 
-if [[ $jpegxl = y ]] || { [[ $ffmpeg != no ]] && enabled libjxl; }; then
+if { [[ $jpegxl = y ]] || { [[ $ffmpeg != no ]] && enabled libjxl; } } || 
+    { [[ $mpv != n ]] && ! mpv_disabled lcms2; } ||
+    { gimp_enabled_any jpeg-xl jpeg2000 || gegl_enabled libraw; } then
+    do_pacman_install libjpeg-turbo
+    do_pacman_remove lcms2
+    _check=(liblcms2{,_fast_float}.a lcms2.pc)
+    [[ $standalone = y ]] && _check+=(bin-global/{jpg,link,ps,trans}icc.exe)
+    { { [[ $ffmpeg != no || $standalone = y ]] && enabled libtesseract; } ||
+        { [[ $standalone = y ]] && enabled libwebp; }; } && _check+=(bin-global/tificc.exe)
+    if do_vcs "$SOURCE_REPO_LCMS"; then
+        do_uninstall include/lcms2{,_fast_float,_plugin}.h "${_check[@]}"
+        extracommands=(-Dtiff=disabled)
+        { { [[ $ffmpeg != no || $standalone = y ]] && enabled libtesseract; } ||
+            { [[ $standalone = y ]] && enabled libwebp; } ||
+            { gimp_enabled_any jpeg-xl jpeg2000 || gegl_enabled libraw; }; } &&
+            extracommands=(-Dtiff=enabled)
+        [[ $standalone = y ]] && extracommands+=(-Dutils=true)
+        LDFLAGS+=" $([[ ${extracommands[@]} = *Dtiff=enabled* ]] && echo "$($PKG_CONFIG --libs libtiff-4)")" \
+            do_mesoninstall global -Djpeg=enabled -Dfastfloat=true "${extracommands[@]}"
+        do_checkIfExist
+    fi
+fi
+
+_deps=(liblcms2.a)
+_check=(libopenjp2.{a,pc} openjpeg-2.5/openjpeg.h)
+if { { [[ $ffmpeg != no ]] && enabled libopenjpeg; } ||
+    gimp_enabled jpeg2000; } &&
+    do_vcs "$SOURCE_REPO_OPENJPEG2"; then
+    do_pacman_remove openjpeg2
+    do_uninstall {include,lib/cmake}/openjpeg-2.5 "${_check[@]}"
+    do_cmakeinstall global -DBUILD_{CODEC,JPIP,JAVA,TESTING}=OFF
+    do_checkIfExist
+fi
+
+_check=(libopenjph.a openjph.pc)
+[[ $standalone = y ]] && _check+=(bin-global/ojph_{compress,expand}.exe)
+if { gimp_enabled openexr || gegl_enabled openexr; } &&
+    do_vcs "$SOURCE_REPO_OPENJPH"; then
+    do_uninstall {include,lib/cmake}/openjph "${_check[@]}"
+    extracommands=(-DOJPH_BUILD_EXECUTABLES=OFF)
+    [[ $standalone = y ]] && extracommands=(-DOJPH_BUILD_EXECUTABLES=ON)
+    do_cmakeinstall "${extracommands[@]}"
+    do_checkIfExist
+fi
+
+if { gimp_enabled openexr || gegl_enabled openexr; }; then
+    do_pacman_install libdeflate
+    # don't error on not finding shared libdeflate library
+    sed -i 's;message(FATAL_ERROR \"The;message(\"The;' "$MINGW_PREFIX"/lib/cmake/libdeflate/libdeflate-targets.cmake
+    _check=(lib{Iex,Ilmthread,OpenEXR{,Core,Util}}-4_0.a libImath-3_2.a
+        {Imath,OpenEXR}.pc Imath/ImathConfig.h OpenEXR/openexr.h)
+    [[ $standalone = y ]] &&
+        _check+=(bin-global/exr{header,info,make{preview,tiled},manifest,multi{part,view},stdattr}.exe)
+    if do_vcs "$SOURCE_REPO_OPENEXR"; then
+        do_uninstall {include,lib/cmake}/{Imath,OpenEXR} "${_check[@]}"
+        extracommands=(-DOPENEXR_BUILD_TOOLS=OFF)
+        [[ $standalone = y ]] && extracommands=(-DOPENEXR_BUILD_TOOLS=ON)
+        # force cmake to link libdeflate statically
+        sed -i 's;EXR_DEFLATE_LIB libdeflate::libdeflate_shared;EXR_DEFLATE_LIB libdeflate::libdeflate_static;' \
+            cmake/OpenEXRSetup.cmake
+        # fix openjph header paths
+        sed -i 's;include <ojph;include <openjph/ojph;' src/lib/OpenEXRCore/internal_ht.cpp
+        do_cmakeinstall global -DBUILD_TESTING=OFF -DOPENEXR_BUILD_EXAMPLES=OFF "${extracommands[@]}"
+        do_checkIfExist
+    fi
+fi
+
+if { { [[ $jpegxl = y ]] || { [[ $ffmpeg != no ]] && enabled libjxl; } } ||
+    gimp_enabled jpeg-xl; }; then
     _check=(bin/gflags_completions.sh gflags.pc gflags/gflags.h libgflags{,_nothreads}.a)
     if do_vcs "$SOURCE_REPO_GFLAGS"; then
         do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/gflags/0001-cmake-chop-off-.lib-extension-from-shlwapi.patch" am
@@ -674,17 +749,18 @@ if [[ $jpegxl = y ]] || { [[ $ffmpeg != no ]] && enabled libjxl; }; then
         do_checkIfExist
     fi
 
-    do_pacman_install brotli lcms2
-    _deps=(libgflags.a)
+    do_pacman_install brotli
+    _deps=(libgflags.a liblcms2.a)
     _check=(libjxl{{,_threads}.a,.pc} jxl/decode.h)
     [[ $jpegxl = y ]] && _check+=(bin-global/{{c,d}jxl,jxlinfo}.exe)
     if do_vcs "$SOURCE_REPO_LIBJXL"; then
         do_git_submodule
         do_uninstall "${_check[@]}" include/jxl bin-global/cjpegli.exe bin-global/djpegli.exe 
         extracommands=()
+        gimp_enabled openexr && extracommands+=("-DJPEGXL_ENABLE_OPENEXR=ON") || extracommands+=("-DJPEGXL_ENABLE_OPENEXR=OFF")
         [[ $jpegxl = y ]] || extracommands=("-DJPEGXL_ENABLE_TOOLS=OFF")
         CXXFLAGS+=" -DJXL_CMS_STATIC_DEFINE -DJXL_STATIC_DEFINE -DJXL_THREADS_STATIC_DEFINE" \
-            do_cmakeinstall global -D{BUILD_TESTING,JPEGXL_ENABLE_{BENCHMARK,DOXYGEN,MANPAGES,OPENEXR,SKCMS,EXAMPLES,JPEGLI}}=OFF \
+            do_cmakeinstall global -D{BUILD_TESTING,JPEGXL_ENABLE_{BENCHMARK,DOXYGEN,MANPAGES,SKCMS,EXAMPLES}}=OFF \
             -DJPEGXL_{FORCE_SYSTEM_{BROTLI,LCMS2},STATIC}=ON "${extracommands[@]}"
         do_checkIfExist
         unset extracommands
@@ -1308,8 +1384,8 @@ file_installed -s libvmaf.dll.a && rm "$(file_installed libvmaf.dll.a)"
 
 _check=(libaom.a aom.pc)
 [[ $aom = y || $standalone = y || $av1an = y ]] && _check+=(bin-video/aom{dec,enc}.exe)
-if { [[ $aom = y ]] || [[ $libavif = y ]] || { [[ $ffmpeg != no ]] && enabled libaom; }; } &&
-    do_vcs "$SOURCE_REPO_LIBAOM"; then
+if { { [[ $aom = y ]] || [[ $libavif = y ]] || { [[ $ffmpeg != no ]] && enabled libaom; }; } ||
+    gimp_enabled heif; } && do_vcs "$SOURCE_REPO_LIBAOM"; then
     do_pacman_install yasm
     do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/aom/0001-CMake-Add-ENABLE_EXTRA_EXAMPLES.patch" am
     extracommands=("-DENABLE_EXTRA_EXAMPLES=off")
@@ -1330,7 +1406,8 @@ fi
 
 _check=(dav1d/dav1d.h dav1d.pc libdav1d.a)
 [[ $standalone = y ]] && _check+=(bin-video/dav1d.exe)
-if { [[ $dav1d = y ]] || [[ $libavif = y ]] || { [[ $ffmpeg != no ]] && enabled libdav1d; }; } &&
+if { [[ $dav1d = y || $libavif = y ]] || { [[ $ffmpeg != no ]] && enabled libdav1d; } || 
+    gimp_enabled heif; } &&
     do_vcs "$SOURCE_REPO_DAV1D"; then
     do_uninstall include/dav1d "${_check[@]}"
     extracommands=()
@@ -1443,7 +1520,7 @@ fi
 _check=(libSDL2{,_test,main}.a sdl2.pc SDL2/SDL.h)
 if { { [[ $ffmpeg != no ]] &&
     { enabled sdl2 || ! disabled_any sdl2 autodetect; }; } ||
-    mpv_enabled sdl2; } &&
+    mpv_enabled sdl2 || gegl_enabled sdl2; } &&
     do_vcs "$SOURCE_REPO_SDL2"; then
     do_uninstall include/SDL2 lib/cmake/SDL2 bin/sdl2-config "${_check[@]}"
     do_autogen
@@ -1903,7 +1980,8 @@ fi
 
 _check=(x265{,_config}.h libx265.a x265.pc)
 [[ $standalone = y || $av1an = y ]] && _check+=(bin-video/x265.exe)
-if [[ ! $x265 = n ]] && do_vcs "$SOURCE_REPO_X265"; then
+if { [[ ! $x265 = n ]] || gimp_enabled heif; } &&
+    do_vcs "$SOURCE_REPO_X265"; then
     grep_and_sed CMAKE_CXX_IMPLICIT_LINK_LIBRARIES source/CMakeLists.txt 's|\$\{CMAKE_CXX_IMPLICIT_LINK_LIBRARIES\}||g'
     grep_or_sed cstdint source/dynamicHDR10/json11/json11.cpp "/cstdlib/ i\#include <cstdint>"
     do_uninstall libx265{_main10,_main12}.a bin-video/libx265_main{10,12}.dll "${_check[@]}"
@@ -1929,7 +2007,7 @@ if [[ ! $x265 = n ]] && do_vcs "$SOURCE_REPO_X265"; then
     }
     [[ $standalone = y || $av1an = y ]] && cli=-DENABLE_CLI=ON
 
-    if [[ $x265 =~ (o12|s|d|y) ]]; then
+    if [[ $x265 =~ (o12|s|d|y) ]] || gimp_enabled heif; then
         cd_safe "$build_root/12bit"
         if [[ $x265 = s ]]; then
             do_x265_cmake "shared 12-bit lib" $assembly -DENABLE_SHARED=ON -DMAIN12=ON
@@ -1937,13 +2015,13 @@ if [[ ! $x265 = n ]] && do_vcs "$SOURCE_REPO_X265"; then
             _check+=(bin-video/libx265_main12.dll)
         elif [[ $x265 = o12 ]]; then
             do_x265_cmake "12-bit lib/bin" $assembly $cli -DMAIN12=ON
-        else
+        elif [[ $x265 = d || $x265 = y ]] || gimp_enabled heif; then
             do_x265_cmake "12-bit lib for multilib" $assembly -DEXPORT_C_API=OFF -DMAIN12=ON
             cp libx265.a ../8bit/libx265_main12.a
         fi
     fi
 
-    if [[ $x265 =~ (o10|s|d|y) ]]; then
+    if [[ $x265 =~ (o10|s|d|y) ]] || gimp_enabled heif; then
         cd_safe "$build_root/10bit"
         if [[ $x265 = s ]]; then
             do_x265_cmake "shared 10-bit lib" $assembly -DENABLE_SHARED=ON
@@ -1951,17 +2029,17 @@ if [[ ! $x265 = n ]] && do_vcs "$SOURCE_REPO_X265"; then
             _check+=(bin-video/libx265_main10.dll)
         elif [[ $x265 = o10 ]]; then
             do_x265_cmake "10-bit lib/bin" $assembly $cli
-        else
+        elif [[ $x265 = d || $x265 = y ]] || gimp_enabled heif; then
             do_x265_cmake "10-bit lib for multilib" $assembly -DEXPORT_C_API=OFF
             cp libx265.a ../8bit/libx265_main10.a
         fi
     fi
 
-    if [[ $x265 =~ (o8|s|d|y) ]]; then
+    if [[ $x265 =~ (o8|s|d|y) ]] || gimp_enabled heif; then
         cd_safe "$build_root/8bit"
         if [[ $x265 = s || $x265 = o8 ]]; then
             do_x265_cmake "8-bit lib/bin" $cli -DHIGH_BIT_DEPTH=OFF
-        else
+        elif [[ $x265 = d || $x265 = y ]] || gimp_enabled heif; then
             do_x265_cmake "multilib lib/bin" -DEXTRA_LIB="x265_main10.a;x265_main12.a" \
                 -DEXTRA_LINK_FLAGS=-L. $cli -DHIGH_BIT_DEPTH=OFF -DLINKED_{10,12}BIT=ON
             mv libx265.a libx265_main.a
@@ -2387,7 +2465,6 @@ if [[ $ffmpeg != no ]]; then
     enabled libtheora && do_pacman_install libtheora
     enabled libcaca && do_addOption --extra-cflags=-DCACA_STATIC && do_pacman_install libcaca
     enabled libmodplug && do_addOption --extra-cflags=-DMODPLUG_STATIC && do_pacman_install libmodplug
-    enabled libopenjpeg && do_pacman_install openjpeg2
     if enabled libopenh264; then
         # We use msys2's package for the header and import library so we don't build it, for licensing reasons
         do_pacman_install openh264
@@ -2796,36 +2873,46 @@ if [[ $mplayer = y ]] && check_mplayer_updates; then
     unset _notrequired faac_opts
 fi
 
+build_luajit() {
+    local _luajit_bin=${1:-bin-global}
+    do_pacman_remove luajit lua51
+    [[ -f src/luajit.exe ]] && log "clean" make clean
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/LuaJIT/0001-Add-win32-UTF-8-filesystem-functions.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/LuaJIT/0002-win32-UTF-8-Remove-va-arg-and-.-and-unused-functions.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/LuaJIT/0003-make-don-t-override-user-provided-CC.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/LuaJIT/0004-pkgconfig-fix-pkg-config-file-for-mingw64.patch" am
+    do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/LuaJIT/0005-Undo-rolling-release-stuff-since-it-s-not-useful-to-.patch" am
+    do_patch "https://raw.githubusercontent.com/msys2/MINGW-packages/master/mingw-w64-luajit/003-lua51-modules-paths.patch"
+    sed -i "s|export PREFIX= /usr/local|export PREFIX=${LOCALDESTDIR}|g" Makefile
+    sed -i "s|^prefix=.*|prefix=$LOCALDESTDIR|" etc/luajit.pc
+    sed -i '/#include <fcntl.h>/ a\#include <stddef.h>' src/lj_fs_io.c
+    local _luajit_args=("PREFIX=$LOCALDESTDIR" "INSTALL_BIN=$LOCALDESTDIR/$_luajit_bin" "INSTALL_TNAME=luajit.exe")
+    do_make $([[ $_luajit_bin == bin-global ]] && echo amalg BUILDMODE=static || echo BUILDMODE=dynamic) \
+        HOST_CC="$CC" \
+        CFLAGS=' -D_WIN32_WINNT=0x0602 -DUNICODE' \
+        XCFLAGS="-DLUAJIT_ENABLE_LUA52COMPAT$([[ $bits = 64bit ]] && echo " -DLUAJIT_ENABLE_GC64")" \
+        "${_luajit_args[@]}"
+    do_makeinstall "${_luajit_args[@]}"
+    [[ $_luajit_bin == bin ]] &&
+        do_install src/libluajit-5.1.dll.a lib/ &&
+        do_install src/lua51.dll $_luajit_bin
+    unset _luajit_args _luajit_bin
+}
+
 if [[ $mpv != n ]] && pc_exists libavcodec libavformat libswscale libavfilter; then
     if [[ ${MPV_OPTS[lua]} == 5.1 ]]; then
         do_pacman_install lua51
     elif ! mpv_disabled lua &&
         _check=(bin-global/luajit.exe libluajit-5.1.a luajit.pc luajit-2.1/lua.h) &&
         do_vcs "$SOURCE_REPO_LUAJIT" luajit; then
-        do_pacman_remove luajit lua51
         do_uninstall include/luajit-2.1 lib/lua "${_check[@]}"
-        [[ -f src/luajit.exe ]] && log "clean" make clean
-        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/LuaJIT/0001-Add-win32-UTF-8-filesystem-functions.patch" am
-        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/LuaJIT/0002-win32-UTF-8-Remove-va-arg-and-.-and-unused-functions.patch" am
-        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/LuaJIT/0003-make-don-t-override-user-provided-CC.patch" am
-        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/LuaJIT/0004-pkgconfig-fix-pkg-config-file-for-mingw64.patch" am
-        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/LuaJIT/0005-Undo-rolling-release-stuff-since-it-s-not-useful-to-.patch" am
-        sed -i "s|export PREFIX= /usr/local|export PREFIX=${LOCALDESTDIR}|g" Makefile
-        sed -i "s|^prefix=.*|prefix=$LOCALDESTDIR|" etc/luajit.pc
-        _luajit_args=("PREFIX=$LOCALDESTDIR" "INSTALL_BIN=$LOCALDESTDIR/bin-global" "INSTALL_TNAME=luajit.exe")
-        do_make amalg HOST_CC="$CC" BUILDMODE=static \
-            CFLAGS='-D_WIN32_WINNT=0x0602 -DUNICODE' \
-            XCFLAGS="-DLUAJIT_ENABLE_LUA52COMPAT$([[ $bits = 64bit ]] && echo " -DLUAJIT_ENABLE_GC64")" \
-            "${_luajit_args[@]}"
-        do_makeinstall "${_luajit_args[@]}"
+        build_luajit
         do_checkIfExist
-        unset _luajit_args
     fi
 
     do_pacman_remove uchardet-git
     ! mpv_disabled uchardet && do_pacman_install uchardet
     ! mpv_disabled libarchive && do_pacman_install libarchive
-    ! mpv_disabled lcms2 && do_pacman_install lcms2
 
     do_pacman_remove angleproject-git
     _check=(EGL/egl.h)
@@ -3025,6 +3112,16 @@ if [[ $cyanrip = y ]]; then
     fi
 fi
 
+if [[ $vlc == y || $gimp = y ]]; then
+    _check=(pixman-1.pc libpixman-1.a pixman-1/pixman.h)
+    if do_vcs "https://gitlab.freedesktop.org/pixman/pixman.git"; then
+        do_uninstall include/pixman-1 "${_check[@]}"
+        CFLAGS="-msse2 -mfpmath=sse -mstackrealign $CFLAGS" \
+            do_mesoninstall -Dtests=disabled -Ddemos=disabled -Dgtk=disabled
+        do_checkIfExist
+    fi
+fi
+
 if [[ $vlc == y ]]; then
     do_pacman_install lib{cddb,nfs,shout,samplerate,microdns,secret} \
         a52dec taglib gtk3 lua perl
@@ -3206,16 +3303,6 @@ EOF
         do_checkIfExist
     fi
 
-    _check=(pixman-1.pc libpixman-1.a pixman-1/pixman.h)
-    if do_vcs "https://gitlab.freedesktop.org/pixman/pixman.git"; then
-        do_uninstall include/pixman-1 "${_check[@]}"
-        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/pixman/0001-pixman-pixman-mmx-fix-redefinition-of-_mm_mulhi_pu16.patch" am
-        NOCONFIGURE=y do_autogen
-        CFLAGS="-msse2 -mfpmath=sse -mstackrealign $CFLAGS" \
-            do_separate_confmakeinstall
-        do_checkIfExist
-    fi
-
     _check=(libmedialibrary.a medialibrary.pc medialibrary/IAlbum.h)
     if do_vcs "https://code.videolan.org/videolan/medialibrary.git"; then
         do_uninstall include/medialibrary "${_check[@]}"
@@ -3298,6 +3385,901 @@ if [[ $ffmbc = y ]] && do_vcs "$SOURCE_REPO_FFMBC"; then
     do_install ffmbc.exe bin-video/
     do_checkIfExist
     unset _notrequired
+fi
+
+# build GIMP in its own folder as to not mix static and shared libraries
+if [[ $gimp = y ]]; then
+    set_title "compiling GIMP dependencies"
+    do_simple_print -p '\n\t'"${orange}Starting $bits compilation of GIMP dependencies${reset}"
+    do_pacman_remove gtk3 lua pango libcaca fontconfig libsecret glib2 freetype fontconfig harfbuzz fribidi gtk-doc
+
+    # temporarily update env for building GIMP dependenices
+    local _orig_localdestdir="$LOCALDESTDIR"
+    local _orig_c_include_path="${C_INCLUDE_PATH}"
+    local _orig_cplus_include_path="${CPLUS_INCLUDE_PATH}"
+    local _orig_aclocal_path="${ACLOCAL_PATH}"
+    local _orig_infopath="${ACLOCAL_PATH}"
+    local _orig_manpath="${MANPATH}"
+    local _orig_pkg_config_path="${PKG_CONFIG_PATH}"
+    local _orig_path="${PATH}"
+    local _orig_xdg_data_dirs="${XDG_DATA_DIRS}"
+    local _py_ext=x86_64
+    [[ $bits = 32bit ]] && _py_ext=i686
+    [[ $MSYSTEM =~ MINGW ]] && _py_ext+=_msvcrt_gnu
+    [[ $MSYSTEM =~ CLANG ]] && _py_ext+=_ucrt_llvm
+
+    # create folder for GIMP and its shared libraries
+    local _gimp_dir="$LOCALDESTDIR/gimp"
+    [[ ! -d $_gimp_dir ]] && mkdir -p "$_gimp_dir"
+    export LOCALDESTDIR="$_gimp_dir"
+
+    export C_INCLUDE_PATH="$(cygpath -pm $_gimp_dir/include):${C_INCLUDE_PATH}"
+    export CPLUS_INCLUDE_PATH="$(cygpath -pm $_gimp_dir/include):${CPLUS_INCLUDE_PATH}"
+    export ACLOCAL_PATH="${_gimp_dir}/share/aclocal:${ACLOCAL_PATH}"
+    export INFOPATH="${_gimp_dir}/share/info:${INFOPATH}"
+    export MANPATH="${_gimp_dir}/share/man:${MANPATH}"
+    export PKG_CONFIG_PATH="${_gimp_dir}/lib/pkgconfig:${_gimp_dir}/share/pkgconfig:${PKG_CONFIG_PATH}"
+    export PATH="${_gimp_dir}/bin:${PATH}"
+    export XDG_DATA_DIRS="${_gimp_dir}/share:${XDG_DATA_DIRS}"
+
+    export GI_TYPELIB_PATH="${_gimp_dir}/lib/girepository-1.0"
+    export GI_SCANNER_DISABLE_CACHE=1
+    export GIO_EXTRA_MODULES="${_gimp_dir}/lib/gio/modules"
+    export LIBRARY_PATH="${_gimp_dir}/lib:${_gimp_dir}/../lib:${MINGW_PREFIX}/lib"
+    export PYTHONPATH="${_gimp_dir}/lib/python${cpython_major_ver}/site-packages:${MINGW_PREFIX}/lib/python${cpython_major_ver}/site-packages"
+
+    # shellcheck source=media-suite_helper.sh
+    source "$LOCALBUILDDIR"/media-suite_helper.sh
+
+    do_packorstrip_libdir() {
+        local dirName="$1"
+        [[ -n "$dirName" && -d "${_gimp_dir}/lib/$dirName" ]] || return 1
+        if [[ $stripping == y || $packing == y ]]; then
+            local stripTargets=`find "${_gimp_dir}/lib/${dirName}/" -type f -name '*.dll' -o -name '*.exe' -o -name '*.a' 2> /dev/null`
+            [[ $stripping == y ]] && do_strip $stripTargets
+            [[ $packing == y ]] && do_pack $stripTargets
+            unset stripTargets
+        fi
+        unset dirName
+    }
+
+    do_cmakegimpdir() {
+        create_build_dir
+        extra_script pre cmake
+        # shellcheck disable=SC2086
+        log "cmake" cmake .. -G Ninja -DBUILD_SHARED_LIBS=off \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=on \
+            -DCMAKE_TOOLCHAIN_FILE="$_gimp_dir/../etc/toolchain.cmake" \
+            -DCMAKE_INSTALL_PREFIX="$_gimp_dir" -DUNIX=on \
+            -DCMAKE_BUILD_TYPE=Release "$@"
+        extra_script post cmake
+    }
+
+    do_cmakeinstallgimpdir() {
+        do_cmakegimpdir "$@"
+        do_ninja
+        do_ninjainstall
+    }
+
+    do_cmakeshared() {
+        create_build_dir
+        extra_script pre cmake
+        # shellcheck disable=SC2086
+        log "cmake" cmake .. -G Ninja -DBUILD_SHARED_LIBS=on \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=on \
+            -DCMAKE_TOOLCHAIN_FILE="$_gimp_dir/../etc/toolchain.cmake" \
+            -DCMAKE_INSTALL_PREFIX="$_gimp_dir" -DUNIX=on \
+            -DCMAKE_BUILD_TYPE=Release "$@"
+        extra_script post cmake
+    }
+
+    do_cmakeinstallshared() {
+        do_cmakeshared "$@"
+        do_ninja
+        do_ninjainstall
+    }
+
+    do_mesonshared() {
+        create_build_dir
+        extra_script pre meson
+        # shellcheck disable=SC2086
+        PKG_CONFIG="$_gimp_dir/../bin/ab-pkg-config-static.bat" CC=${CC/ccache /}.bat CXX=${CXX/ccache /}.bat \
+            log "meson" meson setup .. --default-library=shared --buildtype=release \
+            --prefix="${_gimp_dir}" --backend=ninja "$@"
+        extra_script post meson
+    }
+
+    do_mesoninstallshared() {
+        do_mesonshared "$@"
+        do_ninja
+        do_ninjainstall
+    }
+
+    _check=(bin/python{,w}.exe bin/libpython3{,${cpython_major_ver: +1}}.dll python-${cpython_major_ver}{,-embed}.pc
+        lib/python${cpython_major_ver}/lib-dynload/math.cp${cpython_major_ver//.}-mingw_${_py_ext}.pyd)
+    if do_vcs "$SOURCE_REPO_CPYTHON"; then
+        do_uninstall all {include,lib}/python${cpython_major_ver} "${_check[@]}"
+        local _extra_ldflags=()
+        extracommands=()
+        [[ $bits = 32bit ]] && _extra_ldflags+=("-Wl,--large-address-aware")
+        [[ $CC =~ clang ]] && extracommands=(--with-lto=full)
+        sed -i "s;Werror=implicit-function-declaration;Wno-error=implicit-function-declaration;" configure.ac
+        do_autoreconf
+        create_build_dir
+        config_path=.. do_configure --enable-{optimizations,shared} --without-ensurepip \
+            --with-system-{expat,ffi,libmpdec} --enable-loadable-sqlite-extensions "${extracommands[@]}"
+        CFLAGS="${CFLAGS/O2/O3}" LDFLAGS="${LDFLAGS/O2/O3} ${_extra_ldflags}" \
+            do_make
+        do_makeinstall
+        # remove symlinks and other unnecessary files
+        rm -f ${_gimp_dir}/bin/{{2to3{,-${cpython_major_ver}},{idle,pydoc}{,3,${cpython_major_ver}}},python{,3,${cpython_major_ver}}-config,python3.exe}
+        rm -f ${_gimp_dir}/lib/pkgconfig/python3{,-embed}.pc
+        rm -f ${_gimp_dir}/share/man/man1/python3.1
+        mv -f ${_gimp_dir}/bin/python{3,}w.exe
+        mv -f ${_gimp_dir}/bin/python{${cpython_major_ver},}.exe
+        cp -f ${_gimp_dir}/bin/python{,3}.exe
+        do_checkIfExist
+        unset _extra_ldflags extracommands
+    fi
+
+    _check=(bin/luajit.exe libluajit-5.1.dll.a luajit.pc luajit-2.1/lua.h)
+    if { gimp_enabled lua || gegl_enabled lua; } && do_vcs "$SOURCE_REPO_LUAJIT" luajit; then
+        do_uninstall all {include,share}/luajit-2.1 {lib,share}/lua "${_check[@]}"
+        build_luajit bin
+        do_checkIfExist
+    fi
+
+    local _glib_check=(bin/libg{io,irepository,lib,module,object,thread}-2.0-0.dll
+        libg{io,lib,module,object,thread}-2.0.dll.a g{io,lib,module,object,thread}-2.0.pc
+        glib-2.0/{{gio/gio,glib/gversion,gobject/gobject,gmodule/gmodule-visibility},g{lib{,-object},module}}.h)
+
+    local _glib_gir_check=(share/gir-1.0/G{{Lib,Module,Module,io{,Win32}}-2.0,IRepository-3.0}.gir
+        lib/girepository-1.0/G{{Lib{,Win32},Module,Object,io{,Win32}}-2.0,IRepository-3.0}.typelib)
+
+    local _glib_uninstall=(include/g{io-win32,lib}-2.0 {lib,share}/glib-2.0)
+
+    [[ -f ${_gimp_dir}/bin/python3.exe ]] && mv -f -f ${_gimp_dir}/bin/{,__}python3.exe
+    do_pacman_install pcre2
+    _check=("${_glib_check[@]}" gobject-introspection{,-no-export}-1.0.pc bin/g-ir-{compiler,generate,inspect}.exe
+        bin/g-ir-scanner bin/libgirepository-1.0-1.dll gobject-introspection-1.0/giversion.h
+        lib/gobject-introspection/giscanner/_giscanner.cp${cpython_major_ver//.}-mingw_${_py_ext}.pyd)
+    if do_vcs "$SOURCE_REPO_GOBJECT_INTROSPECTION"; then
+        do_git_submodule
+        do_uninstall all {include,share}/gobject-introspection-1.0 \
+            lib/gobject-introspection share/gir-1.0/gir-1.2.rnc \
+            "${_check[@]}" "${_glib_uninstall[@]}" "${_glib_gir_check[@]}"
+        do_pacman_install python-{packaging,setuptools}
+        do_pacman_install -m bison flex
+        # rebased from https://gitlab.gnome.org/GNOME/gobject-introspection/-/merge_requests/458
+        do_patch "https://gist.githubusercontent.com/woot000/0419587fca74b484b22567317f28295c/raw/a89916024b27bf2e95329f33abf0e56258f4b18b/458_upd.diff"
+        # g-ir-scanner expects the PKG_CONFIG var to be a path with no arguments
+        grep_and_sed environ "giscanner/pkgconfig.py" "s;os.environ.get\('PKG_CONFIG', 'pkg-config'\);'pkgconf';"
+        do_mesoninstallshared -D{cairo,doctool}=disabled -Dbuild_introspection_data=true
+        do_checkIfExist
+    fi
+
+    _check=("${_glib_gir_check[@]}")
+    if do_vcs "$SOURCE_REPO_GLIB"; then
+        do_git_submodule
+        do_uninstall "${_check[@]}"
+        do_pacman_install python-{packaging,setuptools}
+        sed -i "/\['-mms-bitfields'\]/,+2d" meson.build
+        create_build_dir
+        extra_script pre meson
+        CC=${CC/ccache /}.bat CXX=${CXX/ccache /}.bat \
+            log "meson" meson setup .. --default-library=shared --buildtype=release \
+            --prefix="${_gimp_dir}" --backend=ninja -Dtests=false -Dintrospection=enabled \
+            -D{dtrace,glib_debug,libelf,systemtap,sysprof}=disabled
+        extra_script post meson
+        do_ninja
+        # uninstall non-introspected glib files
+        do_uninstall "${_glib_check[@]}" "${_glib_uninstall[@]}"
+        do_ninjainstall
+        do_checkIfExist
+    fi
+
+    unset _glib_{{,gir_}check,uninstall}
+    [[ -f ${_gimp_dir}/bin/__python3.exe ]] && mv -f -f ${_gimp_dir}/bin/{__,}python3.exe
+
+    local _vala_ver=0.56.18
+    local _vala_hash=f2affe7d40ab63db8e7b9ecc3f6bdc9c2fc7e3134c84ff2d795f482fe926a382
+    _deps=(libglib-2.0.dll.a)
+    _check=(bin/vala{{,c}{,-${_vala_ver:0:4}}.exe,-gen-introspect{,-${_vala_ver:0:4}}} bin/vapigen{,-${_vala_ver:0:4}}.exe
+        libvala-${_vala_ver:0:4}.{a,pc} vala-${_vala_ver:0:4}/vala.h)
+    if do_pkgConfig "libvala-${_vala_ver:0:4} = $_vala_ver" && do_wget -h ${_vala_hash} \
+        "https://download.gnome.org/sources/vala/${_vala_ver:0:4}/vala-${_vala_ver}.tar.xz"; then
+        do_uninstall all {include,lib,share}/vala-${_vala_ver:0:4} "${_check[@]}"
+        do_pacman_install -m bison flex
+        do_patch "https://raw.githubusercontent.com/msys2/MINGW-packages/refs/heads/master/mingw-w64-vala/0001-relocate-plugin-path.patch"
+        do_autoreconf
+        do_separate_confmakeinstall --enable-static --disable-shared --disable-valadoc
+        do_packorstrip_libdir vala-${_vala_ver:0:4}
+        do_checkIfExist
+    fi
+    unset _vala_hash
+
+    _check=(liblensfun.a lensfun.pc lensfun/lensfun.h
+        lib/python${cpython_major_ver}/site-packages/lensfun-0.3.99-py${cpython_major_ver}.egg-info/PKG-INFO)
+    if gegl_enabled lensfun && _deps=(libglib-2.0.dll.a) &&
+        do_vcs "$SOURCE_REPO_LENSFUN"; then
+        do_uninstall "bin/lensfun" "${_check[@]}"
+        do_pacman_install python-setuptools
+        {
+            git revert --no-edit 52b7dfe || git revert --abort
+        } > /dev/null 2>&1
+        do_patch "https://raw.githubusercontent.com/m-ab-s/mabs-patches/master/lensfun/0002-CMake-don-t-add-glib2-s-includes-as-SYSTEM-dirs.patch" am
+        grep_or_sed sys apps/lensfun/__init__.py.in '/import os/ a\import sys'
+        grep_or_sed Libs.private libs/lensfun/lensfun.pc.cmake \
+            "/Libs:/ a\Libs.private: $([[ $CC =~ clang ]] && echo -lc++ || echo -lstdc++)"
+        do_cmakeinstallgimpdir -DPython3_EXECUTABLE="${MINGW_PREFIX}/bin/python.exe" \
+            -DCMAKE_INSTALL_DATAROOTDIR="$_gimp_dir/bin" -DBUILD_STATIC=on \
+            -DBUILD_{TESTS,LENSTOOL,DOC}=off -DINSTALL_HELPER_SCRIPTS=off \
+            -DINSTALL_PYTHON_MODULE=ON
+        do_checkIfExist
+    fi
+
+    _check=(bin/update-mime-database.exe shared-mime-info.pc)
+    if do_vcs "$SOURCE_REPO_SHARED_MIME_INFO"; then
+        do_uninstall all share/{gettext/its/share-mime-info.{its,loc},mime/packages/freedesktop.org.xml} "${_check[@]}"
+        CXXFLAGS+=" -DLIBXML_STATIC" LDFLAGS+=" $(xml2-config --libs) -llzma -lz -lws2_32" \
+            do_mesoninstall -D{build-tests,update-mimedb}=false
+        cp ${_gimp_dir}/{share,lib}/pkgconfig/shared-mime-info.pc
+        do_checkIfExist
+    fi
+
+    _check=(bin/libfreetype-6.dll libfreetype.dll.a freetype2.pc)
+    if do_vcs "$SOURCE_REPO_FREETYPE"; then
+        do_uninstall include/freetype2 bin/freetype-config "${_check[@]}"
+        do_mesoninstallshared -D{harfbuzz,png,bzip2,brotli,zlib,tests}=disabled
+        do_checkIfExist
+    fi
+   
+    _deps=(libfreetype.dll.a)
+    _check=(bin/libfontconfig-1.dll libfontconfig.dll.a fontconfig.pc)
+    if do_vcs "$SOURCE_REPO_FONTCONFIG"; then
+        do_uninstall {include,share}/fontconfig etc/fonts "${_check[@]}"
+        do_pacman_install gperf
+        do_mesoninstallshared -D{cache-build,doc,tests,tools}=disabled -Diconv=enabled
+        # no symlinks
+        for conf in ${_gimp_dir}/etc/fonts/conf.d/*.conf; do
+            rm "${conf}"
+            [[ -f "${_gimp_dir}/share/fontconfig/conf.avail/${conf##*/}" ]] && cp -f \
+                "${_gimp_dir}/share/fontconfig/conf.avail/${conf##*/}" "${conf}"
+        done
+        do_checkIfExist
+    fi
+
+    _deps=(lib{freetype,glib-2.0}.dll.a)
+    _check=(bin/libharfbuzz-{,gobject-}0.dll libharfbuzz.dll.a harfbuzz.pc)
+    if do_vcs "$SOURCE_REPO_HARFBUZZ"; then
+        do_uninstall {include,lib/cmake}/harfbuzz "${_check[@]}"
+        do_pacman_install ragel
+        do_mesoninstallshared -D{glib,gobject,introspection}=enabled \
+            -D{cairo,icu,tests,docs,benchmark,utilities}=disabled
+        do_checkIfExist
+    fi
+
+    _check=(libfribidi.a fribidi.pc)
+    if do_vcs "$SOURCE_REPO_FRIBIDI"; then
+        do_uninstall include/fribidi "${_check[@]}"
+        do_mesoninstall -D{bin,docs,tests}=false
+        do_checkIfExist
+    fi
+
+    _deps=(../lib/lib{pixman-1,png}.a lib{fontconfig,glib-2.0}.dll.a)
+    _check=(bin/libcairo-{,gobject-,script-interpreter-}2.dll libcairo.dll.a cairo.pc cairo/cairo.h)
+    if do_vcs "$SOURCE_REPO_CAIRO"; then
+        do_uninstall include/cairo "${_check[@]}"
+        do_mesoninstallshared -Dtests=disabled -D{dwrite,fontconfig,freetype}=enabled \
+            -D{g,z}lib=enabled -D{spectre,symbol-lookup,xcb,xlib}=disabled
+        do_checkIfExist
+    fi
+
+    _check=(py3cairo.pc pycairo/py3cairo.h lib/python${cpython_major_ver}/site-packages/cairo/__init__.py)
+    if do_vcs "$SOURCE_REPO_PYCAIRO"; then
+        do_uninstall "${_check[@]}" lib/python${cpython_major_ver}/site-packages/{cairo,pycairo*info}
+        do_mesoninstallshared
+        log "python compileall" ${MINGW_PREFIX}/bin/python -m compileall \
+            -o 0 -o 1 -o 2 "${_gimp_dir}/lib/python${cpython_major_ver}/site-packages/cairo"*
+        do_checkIfExist
+    fi
+
+    _check=(pygobject-3.0.pc pygobject-3.0/pygobject.h lib/python${cpython_major_ver}/site-packages/{gi,pygtkcompat}/__init__.py)
+    if do_vcs "$SOURCE_REPO_PYGOBJECT"; then
+        do_uninstall "${_check[@]}" lib/python${cpython_major_ver}/site-packages/{gi,pygtkcompat,PyGObject*info}
+        do_patch "https://gitlab.gnome.org/GNOME/pygobject/-/merge_requests/415.patch"
+        do_mesoninstallshared
+        log "python compileall" ${MINGW_PREFIX}/bin/python -m compileall \
+            -o 0 -o 1 -o 2 "${_gimp_dir}/lib/python${cpython_major_ver}/site-packages/gi"*
+        do_checkIfExist
+    fi
+
+    _check=(bin/libjson-glib-1.0-0.dll libjson-glib-1.0.dll.a json-glib-1.0.pc
+        json-glib-1.0/json-glib/json-glib.h)
+    if do_vcs "$SOURCE_REPO_JSON_GLIB"; then
+        do_uninstall include/json-glib-1.0 "${_check[@]}"
+        do_mesoninstallshared -Dintrospection=enabled -Dgtk_doc=disabled -D{man,tests}=false
+        do_checkIfExist
+    fi
+
+    do_pacman_install json-c
+    _deps=(libglib-2.0.dll.a)
+    _check=(libmypaint.{a,la,pc})
+    if do_vcs "$SOURCE_REPO_LIBMYPAINT"; then
+        do_uninstall include/libmypaint "${_check[@]}"
+        do_pacman_install -m intltool
+        # shared libraries are unhidden so dgettext can work
+        do_unhide_all_sharedlibs
+        do_autogen
+        do_separate_confmakeinstall --enable-{introspection,static} --disable-{gegl,shared}
+        do_hide_all_sharedlibs
+        do_checkIfExist
+    fi
+
+    _check=(mypaint-brushes-2.0.pc)
+    if do_vcs "$SOURCE_REPO_MYPAINT_BRUSHES"; then
+        do_uninstall share/mypaint-data "${_check[@]}"
+        do_autogen
+        do_separate_confmakeinstall
+        cp ${_gimp_dir}/{share,lib}/pkgconfig/mypaint-brushes-2.0.pc
+        do_checkIfExist
+    fi
+
+    do_pacman_install libdatrie
+    _check=(libthai.pc libthai.{,l}a thai/thailib.h)
+    if do_vcs "https://github.com/tlwg/libthai.git"; then
+        do_uninstall include/thai "${_check[@]}"
+        do_autogen
+        do_separate_confmakeinstall --disable-doxygen-doc
+        do_checkIfExist
+    fi
+
+    _deps=(lib{cairo,fontconfig,glib-2.0,harfbuzz}.dll.a lib{fribidi,thai}.a)
+    _check=(bin/libpango{,cairo,ft2,win32}-1.0-0.dll libpango{,cairo,ft2,win32}-1.0.dll.a
+         pango{,cairo,fc,ft2,ot,win32}.pc pango-1.0/pango/pango.h)
+    if do_vcs "$SOURCE_REPO_PANGO"; then
+        do_uninstall include/pango-1.0 "${_check[@]}"
+        do_mesoninstallshared -D{cairo,fontconfig,freetype}=enabled \
+            -Dintrospection=enabled
+        do_checkIfExist
+    fi
+
+    _deps=(../lib/libtiff.a libglib-2.0.dll.a)
+    _check=(bin/libgdk_pixbuf-2.0-0.dll libgdk_pixbuf-2.0.dll.a gdk-pixbuf-2.0.pc gdk-pixbuf-2.0/gdk-pixbuf/gdk-pixbuf.h)
+    if do_vcs "$SOURCE_REPO_GDK_PIXBUF"; then
+        do_uninstall {include,lib}/gdk-pixbuf-2.0 "${_check[@]}"
+        do_patch "https://raw.githubusercontent.com/msys2/MINGW-packages/refs/heads/master/mingw-w64-gdk-pixbuf2/fix-missing-meson-dep.patch"
+        do_patch "https://gist.githubusercontent.com/woot000/6de0953273083f9174463010e81e15ad/raw/5a2fff2155a8170f29fd8e2db8f41e83bc9530fa/0001-build-all-loaders-plus-gdi.patch"
+        do_mesoninstallshared -D{introspection,others}=enabled -D{native_windows_loaders,relocatable}=true \
+            -Dbuiltin_loaders=windows -D{gtk_doc,man,tests,installed_tests,gio_sniffing}=false
+        do_packorstrip_libdir gdk-pixbuf-2.0/2.10.0/loaders
+        do_checkIfExist
+    fi
+
+    _check=(libwmf{,lite}.{,l}a libwmf.pc libwmf/macro.h)
+    if gimp_enabled wmf && do_vcs "$SOURCE_REPO_LIBWMF"; then
+        do_uninstall {include,share}/libwmf "${_check[@]}"
+        do_autoreconf
+        CFLAGS+=" -I$(cygpath -pm ${_gimp_dir}/../include)" \
+            LDFLAGS+=" $(xml2-config --libs) -L${_gimp_dir}/../lib/libxml2.a -lws2_32 -llzma -lz " \
+            do_separate_confmakeinstall --with-libxml2 --without-x
+        do_checkIfExist
+    fi
+
+    do_pacman_install libjpeg-turbo
+    do_pacman_remove lcms2
+    _check=(liblcms2{,_fast_float}.dll.a lcms2.pc)
+    if do_vcs "$SOURCE_REPO_LCMS"; then
+        do_uninstall include/lcms2{,_fast_float,_plugin}.h "${_check[@]}"
+        do_mesoninstallshared -Dutils=false -Dfastfloat=true -D{jpeg,tiff}=enabled
+        do_checkIfExist
+    fi
+
+    _check=(libjasper.a jasper.pc)
+    if gegl_enabled jasper && do_vcs "$SOURCE_REPO_JASPER"; then
+        do_uninstall include/jasper "${_check[@]}"
+        extracommands=(-DJAS_ENABLE_PROGRAMS=OFF)
+        [[ $standalone = y ]] && extracommands=(-DJAS_ENABLE_PROGRAMS=ON)
+        CFLAGS+=" -DFREEGLUT_STATIC" do_cmakeinstallgimpdir -DALLOW_IN_SOURCE_BUILD=ON \
+            -DJAS_ENABLE_LIBJPEG=ON -DJAS_ENABLE_{DOC,LIBHEIF,OPENGL,SHARED}=OFF "${extracommands[@]}"
+        do_checkIfExist
+    fi
+
+    _deps=(lib{lcms2,jasper}.a)
+    _check=(libraw{,_r}.{a,pc})
+    if gegl_enabled libraw; then
+        do_pacman_install omp
+        if do_vcs "$SOURCE_REPO_LIBRAW"; then
+            do_uninstall include/libraw "${_check[@]}"
+            do_patch "https://raw.githubusercontent.com/msys2/MINGW-packages/master/mingw-w64-libraw/0002-libraw-datastream-utf8-api.patch"
+            do_autoreconf
+            CPPFLAGS+=" -DLIBRAW_FORCE_OPENMP" LDFLAGS+=" $([[ $CC == *clang* ]] && echo "-lomp")" \
+                do_separate_confmakeinstall --enable-{jpeg,lcms,openmp,zlib} --disable-examples
+            do_checkIfExist
+        fi
+    fi
+
+    _deps=(liblcms2.dll.a)
+    _check=(libmng.{a,h,pc})
+    if gimp_enabled mng && do_pkgConfig "libmng = 2.0.3" &&
+        do_wget_sf -h 4a462fdd48d4bc82c1d7a21106c8a18b62f8cc0042454323058e6da0dbb57dd3 \
+            "libmng/libmng-2.0.3.tar.xz"; then
+        do_uninstall include/libmng_{conf,types}.h share/mng-2.0 "${_check[@]}"
+        do_patch "https://raw.githubusercontent.com/msys2/MINGW-packages/master/mingw-w64-libmng/libmng-1.0.9-dont-leak-zlib-streams.diff" libmng_zlib.c 0
+        do_patch "https://raw.githubusercontent.com/msys2/MINGW-packages/master/mingw-w64-libmng/libmng-1.0.10-mingw.patch"
+        sed -i 's;MNG_VERSION_PATCH 2;MNG_VERSION_PATCH 3;' cmake/vers.cmake
+        CC=${CC/ccache /} do_cmakeinstallgimpdir -DBUILD_STATIC_LIBS=on -DMNG_INSTALL_LIB_DIR=lib
+        do_checkIfExist
+    fi
+
+    do_pacman_install libde265
+    sed -i 's|@LIBS_PRIVATE@||g' "$MINGW_PREFIX/lib/pkgconfig/libde265.pc"
+    _deps=(../lib/lib{aom,dav1d,x265}.a)
+    gimp_enabled jpeg2000 && _deps+=(../lib/libopenjp2.a)
+    _check=(libheif.{a,pc} libheif/heif.h)
+    if do_vcs "$SOURCE_REPO_LIBHEIF"; then
+        do_uninstall {include,lib/cmake}/libheif "${_check[@]}"
+        extracommands=(-DWITH_{EXAMPLES,GDK_PIXBUF}=OFF)
+        gimp_enabled jpeg2000 && 
+            extracommands+=(-DWITH_OpenJPEG_{DE,EN}CODER=ON) || extracommands+=(-DWITH_OpenJPEG_{DE,EN}CODER=OFF)
+        # workaround for the tiff cmake script not finding libdeflate
+        [[ -d ${_gimp_dir}/../lib/cmake/tiff ]] && mv -f ${_gimp_dir}/../lib/cmake/{,__}tiff
+        CXXFLAGS+=" -I$(cygpath -pm ${_gimp_dir}/../include)" \
+            do_cmakeinstallgimpdir -DWITH_{AOM_{DE,EN}CODER,DAV1D,{LIBDE,X}265}=ON  \
+            -DWITH_{HEADER_COMPRESSION,JPEG_{DE,EN}CODER,UNCOMPRESSED_CODEC}=ON \
+            -D{BUILD_TESTING,ENABLE_PLUGIN_LOADING}=OFF \
+            -DCMAKE_DISABLE_FIND_PACKAGE_Doxygen=TRUE "${extracommands[@]}"
+        [[ -d ${_gimp_dir}/../lib/cmake/__tiff ]] && mv -f ${_gimp_dir}/../lib/cmake/{__,}tiff
+        do_checkIfExist
+    fi
+
+    _deps=(lib{cairo,gdk_pixbuf-2.0,pango-1.0}.dll.a)
+    _check=(bin/librsvg-2-2.dll librsvg-2.dll.a lib/gdk-pixbuf-2.0/2.10.0/loaders/pixbufloader_svg.dll
+        librsvg-2.0.pc librsvg-2.0/librsvg/rsvg.h)
+    if do_vcs "$SOURCE_REPO_LIBRSVG"; then
+        do_uninstall include/librsvg-2.0 "${_check[@]}"
+        # fixes build with clang64
+        [[ $MSYSTEM =~ CLANG ]] && sed -i \
+            "s;link_whole: librsvg_c_lib;link_with: librsvg_c_lib;" rsvg/meson.build
+        # librsvg must be built shared so the adwaita icon PNGs can be generated
+        do_mesonshared -D{introspection,pixbuf-loader,vala}=enabled -D{docs,rsvg-convert}=disabled -Dtests=false \
+            -Dtriplet="${MSYSTEM_CARCH}-pc-windows-gnu$rust_target_suffix"
+        WINAPI_NO_BUNDLED_LIBRARIES=1 do_ninja
+        do_ninjainstall
+        do_checkIfExist
+    fi
+
+    _check=(bin/dot.exe libcgraph.{a,pc} graphviz/cgraph.h)
+    if gegl_enabled graphviz && _deps=(lib{cairo,glib-2.0,pango-1.0,rsvg-2}.dll.a) &&
+        do_vcs "$SOURCE_REPO_GRAPHVIZ"; then
+        do_uninstall all {include,share}/graphviz "${_check[@]}"
+        do_pacman_install -m bison flex
+        do_autogen
+        do_separate_confmakeinstall --enable-static --disable-shared --with-pangocairo=yes \
+            --with-{demos,devil,expat,gdipluss,gtk,gtkglext,gdk,poppler,qt,smyrna}=no \
+            --enable-{guile,go,perl,php,ocaml,tcl,ruby,python,lua,r,sharp,swig,java}=no \
+            LIBS="$($PKG_CONFIG --libs cairo)"
+        # only dot.exe is relevant for GIMP
+        do_uninstall all ${_gimp_dir}/bin/{{acyclic,{b,c}comps,cluster,dijkstra,dot2gxl,edgepaint,gc,{g,graph}ml2gx,gv{2g{m,x}l,color,gen,map,pack{,_static},pr{,_static}},gxl2{dot,gx},mm2gv,nop,prune,sccmap,tred,unflatten}.exe,gvmap.sh}
+        mv -f ${_gimp_dir}/bin/dot{_static,}.exe
+        do_checkIfExist
+    fi
+
+    _check=(gsettings-desktop-schemas/gdesktop-enums.h share/GConf/gsettings/{gsettings-desktop,wm}-schemas.convert)
+    if do_vcs "$SOURCE_REPO_GSETTINGS_DESKTOP_SCHEMAS"; then
+        do_uninstall "${_check[@]}" share/{GConf,pkgconfig/gsettings-desktop-schemas.pc} \
+            share/glib-2.0/schemas/org.gnome.{desktop,system}.*.xml
+        create_build_dir
+        extra_script pre meson
+        CC=${CC/ccache /}.bat CXX=${CXX/ccache /}.bat \
+            log "meson" meson setup .. --default-library=static --buildtype=release \
+            --prefix="${_gimp_dir}" --backend=ninja -Dintrospection=true
+        extra_script post meson
+        do_ninja
+        do_ninjainstall
+        do_checkIfExist
+    fi
+
+    do_pacman_install duktape
+    _deps=(../lib/libcurl.a libglib-2.0.dll.a)
+    _check=(bin/lib{proxy-1,pxbackend-1.0}.dll libproxy.dll.a libproxy-1.0.pc libproxy/proxy.h)
+    if do_vcs "$SOURCE_REPO_LIBPROXY"; then
+        do_uninstall all bin/proxy.exe include/libproxy "${_check[@]}"
+        # install backend in bin instead of lib/libproxy
+        sed -i '/pkglibdir/d' src/backend/meson.build
+        create_build_dir
+        extra_script pre meson
+        CC=${CC/ccache /}.bat \
+            log "meson" meson setup .. --default-library=shared --buildtype=release \
+            --prefix="${_gimp_dir}" --backend=ninja -Dconfig-{env,gnome,kde,sysconfig,osx}=false \
+            -D{docs,tests}=false -Dintrospection=true
+        extra_script post meson
+        do_ninja
+        do_ninjainstall
+        do_checkIfExist
+    fi
+
+    _deps=(lib{glib-2.0,proxy}.dll.a)
+    _check=(gio/modules/libgio{gnutls,gnomeproxy,libproxy,openssl}.dll.a
+        lib/gio/modules/libgio{gnutls,gnomeproxy,libproxy,openssl}.dll)
+    if do_vcs "$SOURCE_REPO_GLIB_NETWORKING"; then
+        do_uninstall "${_check[@]}"
+        # systemd is not relevant on windows
+        sed -i "s;'systemd', 'user';;g" proxy/libproxy/meson.build
+        CFLAGS+=" -DGNUTLS_INTERNAL_BUILD" do_mesoninstallshared -Dopenssl=enabled
+        sed -i "s;$(cygpath -wm $_gimp_dir);;g" "${_gimp_dir}/share/dbus-1/services/org.gtk.GLib.PACRunner.service"
+        do_checkIfExist
+    fi
+
+    _deps=(liblcms2.dll.a libvala-${_vala_ver:0:4}.a)
+    _check=(bin/{babl.exe,libbabl-0.1-0.dll} libbabl-0.1.dll.a babl-0.1.pc babl-0.1/babl/babl.h)
+    if do_vcs "$SOURCE_REPO_BABL"; then
+        do_uninstall all {include,lib}/babl-0.1 "${_check[@]}"
+        do_mesoninstallshared -Denable-{gir,vapi}=true -Dgi-docgen=disabled -Dwith-lcms=enabled -Dwith-docs=false
+        do_packorstrip_libdir babl-0.1
+        do_checkIfExist
+    fi
+
+    if [[ $bits = 64bit ]]; then
+        do_pacman_install libinih
+    elif _check=(libini{h,Reader}.a ini{h,Reader}.pc ini{,Reader}.h) &&
+        do_vcs "$SOURCE_REPO_LIBINIH"; then
+        do_uninstall "${_check[@]}"
+        do_mesoninstall -Dwith_INIReader=true
+        do_checkIfExist
+    fi
+
+    _deps=(../lib/libcurl.a)
+    _check=(libexiv2.a exiv2.pc exiv2/exiv2.hpp)
+    if do_vcs "$SOURCE_REPO_EXIV2"; then
+        do_uninstall {include,lib/cmake}/exiv2 "${_check[@]}"
+        [[ $MSYSTEM =~ MINGW ]] && sed -i '/if(MINGW)/,+6d' cmake/mainSetup.cmake # heinous, but it works
+        grep_or_sed psapi cmake/exiv2.pc.in 's/Libs.private.*/& -lpsapi/'
+        do_cmakeinstallgimpdir -DEXIV2_BUILD_{DOC,EXIV2_COMMAND,SAMPLES,{FUZZ,UNIT}_TESTS}=OFF \
+            -DEXIV2_ENABLE_{BROTLI,CURL,LENSDATA,NLS,PNG,VIDEO,XMP}=ON
+        do_checkIfExist
+    fi
+
+    # set libpthread as a dependency so there's never a version mismatch between gexiv2 and gimp
+    _deps=(libexiv2.a libglib-2.0.dll.a "$MINGW_PREFIX/lib/libpthread.a")
+    _check=(bin/libgexiv2-4.dll libgexiv2.dll.a gexiv2.pc gexiv2/gexiv2.h
+        lib/python${cpython_major_ver}/site-packages/gi/overrides/GExiv2.py)
+    if do_vcs "$SOURCE_REPO_GEXIV2"; then
+        do_uninstall include/gexiv2 "${_check[@]}"
+        git cherry-pick ad34a66edce1d36eeef427558700b298513a28ab > /dev/null 2>&1 ||
+            git cherry-pick --abort
+        local _extra_ldflags=("$($PKG_CONFIG --libs --static exiv2)")
+        LDFLAGS+=" ${_extra_ldflags[@]}" \
+            do_mesoninstallshared -D{introspection,python3,vapi}=true -D{gtk_doc,tests,tools}=false
+        do_checkIfExist
+    fi
+
+    _deps=(libglib-2.0.dll.a)
+    _check=(bin/libatk-1.0-0.dll libatk-1.0.dll.a atk.pc atk-1.0/atk/atkversion.h)
+    if do_vcs "$SOURCE_REPO_AT_SPI2_CORE"; then
+        do_uninstall include/atk-1.0 "${_check[@]}"
+        CFLAGS+=" -DLIBXML_STATIC" \
+            do_mesoninstallshared -D{docs,gtk2_atk_adaptor}=false -Datk_only=true \
+            -Dx11=disabled -Dintrospection=enabled
+        do_checkIfExist
+    fi
+
+    do_pacman_install egl-headers
+    _check=(bin/libepoxy-0.dll libepoxy.dll.a epoxy.pc epoxy/{,e,w}gl{,_generated}.h)
+    if do_vcs "$SOURCE_REPO_LIBEPOXY"; then
+        do_uninstall include/epoxy "${_check[@]}"
+        do_patch "https://raw.githubusercontent.com/msys2/MINGW-packages/refs/heads/master/mingw-w64-libepoxy/001-egl-missing-prototype.patch"
+        do_patch "https://patch-diff.githubusercontent.com/raw/anholt/libepoxy/pull/296.patch" am
+        do_mesoninstallshared -D{docs,tests}=false -Degl=yes -Dx11=false
+        do_checkIfExist
+    fi
+
+    _deps=(lib{atk-1.0,cairo,epoxy,gdk_pixbuf-2.0,glib-2.0,pango-1.0}.dll.a)
+    _check=(bin/lib{gdk,gtk}-3-0.dll lib{gdk,gtk}-3.dll.a {gdk,gtk+}-3.0.pc gtk-3.0/{gdk/gdk,gtk/gtk}.h)
+    if do_vcs "$SOURCE_REPO_GTK"; then
+        do_uninstall all bin/gtk-{builder-tool,encode-symbolic-svg,launch,-update-icon-cache}.exe \
+            bin/gtk-query-{immodules-3.0,settings}.exe include/gtk-3.0 "${_check[@]}"
+        do_patch "https://raw.githubusercontent.com/msys2/MINGW-packages/master/mingw-w64-gtk3/0003-gtkwindow-Don-t-force-enable-CSD-under-Windows.patch" am
+        do_patch "https://raw.githubusercontent.com/msys2/MINGW-packages/master/mingw-w64-gtk3/0004-Disable-low-level-keyboard-hook.patch" am
+        sed -i "s;-Wl,-luuid;-luuid;" meson.build
+        CFLAGS+=" -Wno-incompatible-pointer-types" do_mesoninstallshared --wrap-mode=nodownload -Dintrospection=true \
+            -Dbuiltin_immodules=none -D{demos,examples,tests}=false -D{gtk_doc,man}=false
+        do_packorstrip_libdir gtk-3.0/3.0.0/immodules
+        do_checkIfExist
+    fi
+
+    local _poppler_data_ver=0.4.12
+    _check=(poppler-data.pc)
+    if do_pkgConfig "poppler-data = ${_poppler_data_ver}" &&
+        do_wget "https://poppler.freedesktop.org/poppler-data-${_poppler_data_ver}.tar.gz"; then
+        do_uninstall share/poppler "${_check[@]}"
+        log "install" make prefix="${_gimp_dir}" install
+        cp ${_gimp_dir}/{share,lib}/pkgconfig/poppler-data.pc
+        do_checkIfExist
+    fi
+    unset _poppler_data_ver
+
+    sed -i 's;message(FATAL_ERROR "The imported target;message(WARNING "The imported target;' "$MINGW_PREFIX"/lib/cmake/CURL/CURLTargets.cmake
+    _deps=(../lib/lib{curl,openjp2,tiff}.a lib{cairo,lcms2}.dll.a)
+    _check=(libpoppler{,-cpp,-glib}.a poppler{,-cpp,-glib}.pc)
+    if do_vcs "$SOURCE_REPO_POPPLER"; then
+        do_uninstall include/poppler "${_check[@]}"
+        extracommands=()
+        gimp_enabled jpeg2000 && extracommands+=(-DENABLE_LIBOPENJPEG=openjpeg2) || extracommands+=(-DENABLE_LIBOPENJPEG=none)
+        # workaround for the tiff cmake script not finding libdeflate
+        [[ -d ${_gimp_dir}/../lib/cmake/tiff ]] && mv -f ${_gimp_dir}/../lib/cmake/{,__}tiff
+        CC=${CC/ccache /} CXX=${CXX/ccache /} \
+            do_cmakeinstallgimpdir -DBUILD_{CPP,GTK,MANUAL,QT5,QT6}_TESTS=OFF -DRUN_GPERF_IF_PRESENT=OFF \
+            -DENABLE_{BOOST,GPGME,GTK_DOC,NSS3,QT5,QT6,RELOCATABLE,UTILS}=OFF -DENABLE_DCTDECODER=libjpeg \
+            -DENABLE_{CPP,GOBJECT_INTROSPECTION,GLIB,LIBCURL,UNSTABLE_API_ABI_HEADERS}=ON \
+            "${extracommands[@]}"
+        [[ -d ${_gimp_dir}/../lib/cmake/__tiff ]] && mv -f ${_gimp_dir}/../lib/cmake/{__,}tiff
+        do_checkIfExist
+    fi
+    
+    grep_or_sed Requires.private "$_gimp_dir/lib/pkgconfig/poppler.pc" \
+        's;Version:.*;&\nRequires.private: libjpeg libtiff-4;'
+    gimp_enabled jpeg2000 && grep_or_sed libopenjp2 "$_gimp_dir/lib/pkgconfig/poppler.pc" \
+        '/libtiff-4/ s/$/ libopenjp2/'
+    grep_or_sed "$([[ $CC =~ clang ]] && echo -lc++ || echo -lstdc++)" "$_gimp_dir/lib/pkgconfig/poppler.pc" \
+        "s/Libs.private.*/& $([[ $CC =~ clang ]] && echo -lc++ || echo -lstdc++)/"
+
+    _check=(lib/lua/5.1/lgi/corelgilua51.dll share/lua/5.1/lgi.lua)
+    if gimp_enabled lua && do_vcs "$SOURCE_REPO_LGI"; then
+        do_uninstall share/lua/5.1/lgi "${_check[@]}"
+        grep_or_sed luajit-2.1 lgi/lgi.h "s;include <l;include <luajit-2.1/l;"
+        grep_or_sed luajit-5.1 lgi/Makefile "s;llua;lluajit-5.1;"
+        do_make && do_makeinstall PREFIX="${_gimp_dir}"
+        do_checkIfExist
+    fi
+
+    _check=(bin/libarchive.dll libarchive.dll.a libarchive.pc)
+    if do_vcs "$SOURCE_REPO_LIBARCHIVE"; then
+        do_uninstall archive{,_entry}.h "${_check[@]}"
+        CFLAGS+=" -DLIBXML_STATIC" do_cmakeinstallshared -DENABLE_{COVERAGE,TEST}=OFF
+        do_checkIfExist
+    fi
+
+    do_pacman_install libyaml
+    _deps=(lib{gdk_pixbuf-2.0,gtk-3,glib-2.0}.dll.a)
+    _check=(bin/appstreamcli.exe bin/libappstream-5.dll libappstream.dll.a appstream.pc)
+    if do_vcs "$SOURCE_REPO_APPSTREAM"; then
+        do_uninstall all include/libappstream "${_check[@]}"
+        do_pacman_install gperf itstool
+        git cherry-pick 0aa8a74c7d70d4f61b64ffeae9e43bed7db47a2f > /dev/null 2>&1 ||
+            git cherry-pick --abort
+        local _extra_ldflags=()
+        [[ $CC =~ gcc ]] && _extra_ldflags=("-Wl,--allow-multiple-definition") # multiple definition of `libintl_fprintf'
+        LDFLAGS+=" ${_extra_ldflags[@]}" do_mesoninstallshared -D{apidocs,docs,install-docs,man,stemming,systemd}=false
+        do_checkIfExist
+        unset _extra_ldflags
+    fi
+
+
+    _check=(libmaxflow.a maxflow.pc maxflow-3.0/maxflow.h)
+    if gegl_enabled maxflow && do_vcs "$SOURCE_REPO_MAXFLOW"; then
+        do_uninstall include/maxflow-3.0 "${_check[@]}"
+        # static hack
+        sed -i "s;maxflow SHARED;maxflow STATIC;" CMakeLists.txt
+        do_cmakeinstallgimpdir
+        do_checkIfExist
+    fi
+
+    if gegl_enabled libav; then
+        _check=(lib{av{codec,format,util},swscale}.{a,pc})
+        if files_exist "${_check[@]}"; then
+            do_print_status "ffmpeg git" "$green" "Up-to-date"
+        elif do_vcs "${ffmpegPath%%#*}#branch=release/7.1"; then
+            do_uninstall include/lib{av{codec,format,util},swscale} share/ffmpeg "${_check[@]}"
+            [[ -f config.mak ]] && log "distclean" make distclean
+            create_build_dir gegl
+            mapfile -t audio_codecs < <(
+                sed -n '/audio codecs/,/external libraries/p' ../libavcodec/allcodecs.c |
+                sed -n 's/^[^#]*extern.* *ff_\([^ ]*\)_decoder;/\1/p')
+            config_path=.. LDFLAGS+=" -L$MINGW_PREFIX/lib" \
+                do_configure "${FFMPEG_BASE_OPTS[@]}" --prefix="$_gimp_dir" \
+                --disable-{av{device,filter},swresample,postproc} \
+                --disable-{programs,devices,filters,encoders,muxers,debug,sdl2,network,protocols,doc} \
+                --enable-gpl --enable-protocol=file,pipe --disable-decoder="$(IFS=, ; echo "${audio_codecs[*]}")" \
+                --disable-bsf=aac_adtstoasc,{dca,eac3}_core,mov2textsub,mp3_{decomp,header_decompress},noise,opus_metadata,pcm_rechunk,text2movsub
+            unset audio_codecs
+            do_make && do_makeinstall
+            files_exist "${_check[@]}" && touch "build_successful${bits}_gegl"
+            unset_extra_script
+        fi
+    fi
+
+    gegl_enabled libspiro && do_pacman_install libspiro
+    gegl_enabled umfpack && do_pacman_install suitesparse
+    if { gegl_enabled openmp || gimp_enabled openmp; }; then
+        do_pacman_install omp
+    fi
+
+    _deps=(../lib/lib{jasper,png,raw,SDL2,tiff,webp}.a
+        lib{av{codec,format,util},swscale,lensfun,maxflow,poppler{,-glib}}.a
+        lib{babl-0.1,cairo,gdk_pixbuf-2.0,gexiv2,glib-2.0,lcms2,pango-1.0,rsvg-2}.dll.a bin/dot.exe)
+    _check=(bin/libgegl-{0.4-0,{sc,npd}-0.4}.dll bin/gegl{,-imgcmp}.exe libgegl{,-npd,-sc}-0.4.dll.a
+        gegl{,-sc}-0.4.pc lib/gegl-0.4/gegl-{{common{,-cxx,-gpl3},generated},core}.dll)
+    if do_vcs "$SOURCE_REPO_GEGL"; then
+        do_uninstall {include,lib,share}/gegl-0.4 "${_check[@]}"
+        do_pacman_install python-setuptools
+        local _extra_ldflags=()
+        if gegl_enabled umfpack; then
+            _extra_ldflags+=("$($PKG_CONFIG --libs --static umfpack)")
+            [[ $CC =~ clang ]] && _extra_ldflags+=("-lpsapi")
+        fi
+        # don't use deprecated lensfun functions
+        sed -e 's;lf_db_new;lf_db_create;' -e 's;lf_db_find_lenses_hd;lf_db_find_lenses;' \
+            -i operations/workshop/external/lens-correct.c
+        LDFLAGS+=" ${_extra_ldflags[@]}" \
+            do_mesoninstallshared -Dintrospection=true -Dcairo=enabled \
+            -Dgtk-doc=false -D{gi-docgen,libv4l{,2},mrg}=disabled "${GEGL_OPTS[@]}"
+        do_packorstrip_libdir gegl-0.4
+        do_checkIfExist
+    fi
+
+    _deps=(../lib/libcurl.a)
+    _check=(libcfitsio.a cfitsio.pc)
+    if gimp_enabled fits && do_vcs "$SOURCE_REPO_CFITSIO"; then
+        do_uninstall cfitsio_export.h fitsio{,2}.h longnam.h "${_check[@]}"
+        CFLAGS+=" -D_LARGEFILE_SOURCE=ON -D_FILE_OFFSET_BITS=64 -DCURL_STATICLIB" \
+            do_cmakeinstallgimpdir -D{TESTS,UTILS}=OFF -DUSE_{PTHREADS,SSE2,SSSE3}=ON
+        do_checkIfExist
+    fi
+
+    if gimp_enabled ghostscript; then
+        _check=(libidn.{{,l}a,pc} idna.h)
+        if do_pkgConfig "libidn = 1.43" &&
+            do_wget -h bdc662c12d041b2539d0e638f3a6e741130cdb33a644ef3496963a443482d164 \
+            "https://ftp.gnu.org/gnu/libidn/libidn-1.43.tar.gz"; then
+            do_uninstall "${_check[@]}"
+            do_separate_confmakeinstall --disable-{doc,rpath,nls}
+            do_checkIfExist
+        fi
+
+        do_pacman_install libpaper jbig2dec
+        local _ghostscript_ver=10.06.0
+        local _ghostscript_hash=64352648c2c081c8a9fb1a12dc1965e01ead7c57f58b72d1b54f6ef1cef3c561
+        _deps=(../lib/lib{openjp2,png,tiff}.a libidn.a libgdk_pixbuf-2.0.dll.a)
+        _check=(bin/gs.exe bin/libgs-10.dll libgs.dll.a ghostscript/iapi.h)
+        if files_exist "${_check[@]}"; then
+            do_print_status "ghostscript-${_ghostscript_ver}" "$green" "Up-to-date"
+        elif do_wget -h ${_ghostscript_hash} \
+            "https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download/gs${_ghostscript_ver//.}/ghostscript-${_ghostscript_ver}.tar.xz"; then
+            do_uninstall {include,share}/ghostscript "${_check[@]}"
+            extracommands=()
+            gimp_enabled jpeg2000 && extracommands+=("--enable-openjpeg")
+            do_patch "https://raw.githubusercontent.com/msys2/MINGW-packages/master/mingw-w64-ghostscript/001-mingw-build.patch"
+            do_patch "https://raw.githubusercontent.com/msys2/MINGW-packages/master/mingw-w64-ghostscript/002-ghostscript-sys-zlib.patch"
+            sed -e "s|/usr|${MINGW_PREFIX}/${MINGW_CHOST}|g" -i base/all-arch.mak base/unix-aux.mak
+            rm -rf expat freetype jbig2dec jpeg libpng openjpeg tiff zlib tesseract leptonica
+            do_autoreconf
+            create_build_dir
+            CFLAGS+=" -DOPJ_STATIC -Wno-int-conversion -Wno-incompatible-pointer-types -std=gnu17" config_path=.. \
+                do_configure --enable-{fontconfig,freetype} --with-jbig2dec \
+                --disable-{contrib,cups,dbus,gtk} --without-x \
+                --with-{drivers=ALL,lib{iconv=gnu,idn},system-libtiff} \
+                "${extracommands[@]}" \
+                LIBS="$($PKG_CONFIG --libs --static Libidn libtiff-4)"
+            do_make so
+            log "install" make soinstall
+            do_install ../base/gserrors.h include/ghostscript/
+            do_install ../devices/gdevdsp.h include/ghostscript/
+            do_install ../psi/i{api,errors}.h include/ghostscript/
+            mv -f ${_gimp_dir}/bin/{gsc,gs}.exe
+            # remove copious amount of scripts
+            rm -f ${_gimp_dir}/bin/{gs{bj,dj,dj500,lj,lp,nd},ps2{ascii,epsi,pdf{,12,13,14},pdfwr,ps,ps2},eps2eps,pf2afm,pfbtopfa,pphs,printafm,dvipdf,lprsetup.sh,unix-lpr.sh}
+            do_checkIfExist
+        fi
+        unset _ghostscript_{hash,ver}
+    fi
+
+    _check=(bin/exchndl.dll libexchndl.dll.a exchndl.h)
+    if do_vcs "$SOURCE_REPO_DRMINGW"; then
+        do_git_submodule
+        do_uninstall bin/{drmingw.exe,mgwhelp.dll} libmgwhelp.dll.a "${_check[@]}"
+        do_pacman_install discount
+        do_patch "https://raw.githubusercontent.com/msys2/MINGW-packages/master/mingw-w64-drmingw/0002-drmingw-allow-posix-threads.patch"
+        # use system zlib
+        rm -rf thirdparty/zlib{,.cmake}
+        sed -i '/zlib.cmake/d' thirdparty/CMakeLists.txt
+        do_cmakeinstallshared
+        rm -rf $_gimp_dir/{doc,sample}/
+        do_checkIfExist
+    fi
+
+    local _adwaita_ver=49.0
+    local _adwaita_hash=65166461d1b278aa942f59aa8d0fccf1108d71c65f372c6266e172449791755c
+    _check=(adwaita-icon-theme.pc share/icons/Adwaita/index.theme)
+    if do_pkgConfig "adwaita-icon-theme = ${_adwaita_ver}" && do_wget -h ${_adwaita_hash} \
+        "https://download.gnome.org/sources/adwaita-icon-theme/${_adwaita_ver:0:2}/adwaita-icon-theme-${_adwaita_ver}.tar.xz"; then
+        do_uninstall "${_check[@]}" share/{icons/Adwaita,pkgconfig/adwaita-icon-theme.pc}
+        do_mesoninstall
+        log -q "gtk_update_icon_cache" gtk-update-icon-cache -t -f ${_gimp_dir}/share/icons/Adwaita
+        cp ${_gimp_dir}/{share,lib}/pkgconfig/adwaita-icon-theme.pc
+        do_checkIfExist
+    fi
+    unset _adwaita_{hash,ver}
+
+    local _iso_codes_ver=4.20.1
+    local _iso_codes_hash=2d7d9f6084ab9ce6c534ce71a3dd5144b6e474f3c97616459a88f73f44a64bff
+    _check=(iso-codes.pc share/xml/iso-codes/iso_639.xml)
+    if do_pkgConfig "iso-codes = ${_iso_codes_ver}" && do_wget -h ${_iso_codes_hash} \
+        "https://salsa.debian.org/iso-codes-team/iso-codes/-/archive/v${_iso_codes_ver}/iso-codes-v${_iso_codes_ver}.tar.gz"; then
+        do_uninstall "${_check[@]}" share/xml/iso-codes
+        do_mesoninstall
+        cp ${_gimp_dir}/{share,lib}/pkgconfig/iso-codes.pc
+        do_checkIfExist
+    fi
+    unset _iso_codes_{hash,ver}
+
+    gimp_enabled aa && do_pacman_install aalib
+    gimp_enabled ilbm && do_pacman_install libilbm
+    gimp_enabled xpm && do_pacman_install xpm-nox
+
+    _deps=(../lib/lib{heif,jxl,OpenEXR-4_0,openjp2,tiff,webp}.a "$MINGW_PREFIX/lib/libpthread.a"
+        lib{mng,mypaint,poppler{-glib},vala-${_vala_ver:0:4},wmf}.a
+        lib{archive,babl-0.1,cairo,freetype,fontconfig,gdk_pixbuf-2.0,gegl-0.4,gexiv2,glib-2.0,gs,gtk-3,harfbuzz,lcms2,pango-1.0,rsvg-2}.dll.a)
+    _check=(bin/gimp{,-debug-tool,-test-clipboard,tool}-3.2.exe bin/gimp-script-fu-interpreter-3.0.exe
+        bin/libgimp{,-scriptfu,base,color,config,thumb,math,module,ui,widgets}-3.0-0.dll
+        libgimp-3.0.dll.a gimp{,thumb,ui}-3.0.pc share/icons/hicolor/scalable/apps/gimp.svg)
+    opt_exists GIMP_OPTS "-Denable-console-bin=true" && _check+=(bin/gimp-console-3.2.exe)
+    if do_vcs "$SOURCE_REPO_GIMP"; then
+        log -q "git.submodule" git submodule deinit -f .
+        do_git_submodule
+        do_uninstall all include/gimp-3.0 {etc,lib,share}/gimp "${_check[@]}"
+        do_pacman_install libxslt python-packaging qoi
+        {
+            git revert --no-edit 4a648b66 || git revert --abort
+            git revert --no-edit 5a17cafa || git revert --abort
+            git revert --no-edit dcec82a6 || git revert --abort
+        } > /dev/null 2>&1
+
+        gimp_enabled mng && sed -i 's;DMNG_USE_DLL;UMNG_USE_DLL;' plug-ins/common/meson.build
+        local _extra_cflags=()
+        gimp_enabled jpeg2000 && _extra_cflags+=("-DOPJ_STATIC")
+        local _extra_ldflags=("-Wl,--allow-multiple-definition") # because pthreads is statically linked into the gexiv dll
+        [[ $bits = 32bit ]] && _extra_ldflags+=("-Wl,--large-address-aware")
+        [[ $CC =~ clang ]] && _extra_ldflags+=("-lpsapi") # needed so file-dds.exe can compile
+        if gimp_enabled ghostscript; then
+            _extra_ldflags+=("$($PKG_CONFIG --libs --static lib{idn,jpeg,tiff-4} jbig2dec)")
+            gimp_enabled jpeg2000 && _extra_ldflags+=("$($PKG_CONFIG --libs --static libopenjp2)")
+        fi
+        if gimp_enabled fits; then
+            _extra_ldflags+=("-lnormaliz -lpsl -lbcrypt -ladvapi32 -lwldap32 -lzstd -lsecur32") && # curl-config --static-libs, excluding duplicates from following line
+            _extra_ldflags+=("$($PKG_CONFIG --libs --static libbrotlidec libidn2 libnghttp2 libssh2 openssl)")
+            [[ $bits = 32bit ]] || _extra_ldflags+=("$($PKG_CONFIG --libs --static libnghttp3)") # doesn't exist on 32-bit
+            [[ $CC =~ clang ]] && _extra_cflags+=("-DNGTCP2_STATICLIB") && _extra_ldflags+=("-lngtcp2 -lngtcp2_crypto_ossl")
+        fi
+        CFLAGS+=" ${_extra_cflags[@]}" LDFLAGS+=" ${_extra_ldflags[@]}" \
+            do_mesoninstallshared -Dcheck-update=no \
+            -D{alsa,gudev,javascript,linux-input,xcursor}=disabled \
+            -D{appdata-test,enable-default-bin,gi-docgen,headless-tests}=disabled \
+            "${GIMP_OPTS[@]}" -Dbuild-id="media-autobuild_suite-${MSYSTEM}"
+        log -q "gdk_pixbuf_query_loaders" gdk-pixbuf-query-loaders --update-cache
+        do_packorstrip_libdir gimp/3.0
+        do_checkIfExist
+        unset _extra_cflags _extra_ldflags
+    fi
+
+    export PYTHONPATH=
+    export LOCALDESTDIR="${_orig_localdestdir}"
+    export C_INCLUDE_PATH="${_orig_c_include_path}"
+    export CPLUS_INCLUDE_PATH="${_orig_cplus_include_path}"
+    export ACLOCAL_PATH="${_orig_aclocal_path}"
+    export INFOPATH="${_orig_infopath}"
+    export MANPATH="${_orig_manpath}"
+    export PKG_CONFIG_PATH="${_orig_pkg_config_path}"
+    export PATH="${_orig_path}"
+    export XDG_DATA_DIRS="${_orig_xdg_data_dirs}"
+
+    unset _orig_{{aclocal,c{,plus}_include,pkg_config}_path,{,info,man}path,localdestdir,xdg_data_dirs} _gimp_dir _vala_ver _py_ext
+    unset GI_TYPELIB_PATH GI_SCANNER_DISABLE_CACHE GIO_EXTRA_MODULES LIBRARY_PATH
+
+    # shellcheck source=media-suite_helper.sh
+    source "$LOCALBUILDDIR"/media-suite_helper.sh
 fi
 
 do_simple_print -p "${orange}Finished $bits compilation of all tools${reset}"
